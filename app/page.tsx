@@ -39,11 +39,10 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [scanUrl, setScanUrl] = useState("");
   const [scanNamespace, setScanNamespace] = useState("");
-  const [scanMaxPages, setScanMaxPages] = useState("50");
+  const [scanMaxPages, setScanMaxPages] = useState("100");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Diagnóstico automático de salud del sistema al iniciar
   const checkSystemHealth = async () => {
     try {
       const res = await fetch("/api/health");
@@ -119,7 +118,6 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Alerta visual inmediata si ocurre un error en la consulta
         setActiveAlert({
           type: "error",
           title: "Error en la Consulta RAG",
@@ -165,7 +163,7 @@ export default function Home() {
         body: JSON.stringify({
           targetUrl: scanUrl.trim(),
           clientNamespace: scanNamespace.trim(),
-          maxPages: parseInt(scanMaxPages, 10) || 50,
+          maxPages: parseInt(scanMaxPages, 10) || 100,
           aiProvider,
         }),
       });
@@ -580,15 +578,15 @@ export default function Home() {
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Máximo de Páginas a Rastrear
+                  Máximo de Páginas a Rastrear (Sin Límite Superior)
                 </label>
                 <input
                   type="number"
                   min="1"
-                  max="500"
                   disabled={scanStatus?.type === "success"}
                   value={scanMaxPages}
                   onChange={(e) => setScanMaxPages(e.target.value)}
+                  placeholder="ej. 500, 1000, 5000..."
                   className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
                 />
               </div>
