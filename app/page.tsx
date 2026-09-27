@@ -213,8 +213,8 @@ export default function Home() {
               onChange={(e) => setAiProvider(e.target.value)}
               className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
             >
-              <option value="gemini">Google Gemini 3.8 Flash (Gratis ~1,500 RPD)</option>
-              <option value="openai">OpenAI GPT-4o Mini (Pago por uso / Créditos)</option>
+              <option value="gemini">Google Gemini 3.8 Flash (~350-500 URLs/día gratis)</option>
+              <option value="openai">OpenAI GPT-4o Mini (URLs ilimitadas / Créditos API)</option>
             </select>
           </div>
 
@@ -297,7 +297,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Alerta Informativa de Límites y Cuotas según el Modelo Activo */}
+      {/* Alerta Informativa de Límites y Cuotas expresada en URLs Diarias */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-md">
         <div className="flex items-center gap-2 text-slate-300">
           <Info className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -308,11 +308,11 @@ export default function Home() {
         <div className="flex items-center gap-2">
           {aiProvider === "gemini" ? (
             <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[11px]">
-              🎁 Cuota Gratuita: Hasta ~1,500 peticiones/día (~15/min) en Google AI Studio
+              🎁 Capacidad Gratuita: ~350 a 500 URLs/páginas web por día (~750 consultas de chat/día)
             </span>
           ) : (
             <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono text-[11px]">
-              💳 Cuota de Pago/Créditos: Sin límite rígido diario (Requiere OPENAI_API_KEY)
+              💳 Capacidad Pagada: URLs ilimitadas según tu saldo de créditos en OpenAI
             </span>
           )}
         </div>
