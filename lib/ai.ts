@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 function getGenAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -8,13 +9,40 @@ function getGenAIClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Falta la variable de entorno OPENAI_API_KEY");
+  }
+  return new OpenAI({ apiKey });
+}
+
+export interface ContextChunk {
+  url: string;
+  h1: string;
+  text: string;
+}
+
 /**
- * Genera un vector embedding de 768 dimensiones usando gemini-embedding-001 con reintentos automáticos
+ * Genera un vector embedding de 768 dimensiones soportando alternancia entre Gemini y OpenAI
  */
 export async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
+  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+
+  if (provider === "openai") {
+    const openai = getOpenAIClient();
+    const res = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: text,
+      dimensions: 768, // Ajustado exactamente a las 768 dimensiones del índice Pinecone
+    });
+    return res.data[0].embedding;
+  }
+
+  // Proveedor por defecto: Google Gemini
   const genAI = getGenAIClient();
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
-  
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const result = await model.embedContent({
@@ -45,12 +73,12 @@ export async function generateEmbedding(text: string, retries = 3): Promise<numb
 }
 
 /**
- * Genera vectores embedding por lotes con salvaguarda de cuotas de Gemini
+ * Genera vectores embedding por lotes con salvaguarda de cuotas
  */
 export async function generateEmbeddingsBatch(
   texts: string[],
-  batchSize = 3,
-  delayMs = 350
+  batchSize = 5,
+  delayMs = 250
 ): Promise<{ vectors: number[][]; processedCount: number; quotaExhausted: boolean }> {
   const vectors: number[][] = [];
   let quotaExhausted = false;
@@ -73,7 +101,7 @@ export async function generateEmbeddingsBatch(
         err.message?.includes("RESOURCE_EXHAUSTED");
 
       if (isQuota) {
-        console.warn(`\n⚠️ Se ha alcanzado el límite de cuota de la cuenta gratuita de Gemini API.`);
+        console.warn(`\n⚠️ Se ha alcanzado el límite de cuota del proveedor de IA activo.`);
         console.warn(`💾 Salvaguardando de forma segura los ${vectors.length} vectores procesados hasta el momento...`);
         quotaExhausted = true;
         break;
@@ -89,27 +117,14 @@ export async function generateEmbeddingsBatch(
   return { vectors, processedCount: vectors.length, quotaExhausted };
 }
 
-export interface ContextChunk {
-  url: string;
-  h1: string;
-  text: string;
-}
-
 /**
- * Genera una respuesta RAG estricta basada únicamente en el contexto provisto usando gemini-3.8-flash
+ * Genera una respuesta RAG estricta usando Gemini (gemini-3.8-flash) u OpenAI (gpt-4o-mini)
  */
 export async function generateRAGResponse(
   query: string,
   contextChunks: ContextChunk[]
 ): Promise<{ text: string; sources: string[] }> {
-  const genAI = getGenAIClient();
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-3.8-flash",
-    generationConfig: {
-      temperature: 0.2,
-    }
-  });
-
+  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
   const formattedContext = contextChunks
     .map((chunk, index) => `[Fuente ${index + 1}] (URL: ${chunk.url}, H1: ${chunk.h1}):\n${chunk.text}`)
     .join("\n\n---\n\n");
@@ -126,27 +141,26 @@ Reglas Estrictas:
 4. NO inventes ni asumas información fuera del contexto.
 
 CONTEXTO RECUPERADO:
-${formattedContext}
+${formattedContext}`;
 
-PREGUNTA DEL USUARIO:
-${query}`;
+  if (provider === "openai") {
+    const openai = getOpenAIClient();
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: query },
+      ],
+    });
 
-  const result = await model.generateContent(systemPrompt);
-  const responseText = result.response.text();
+    return {
+      text: completion.choices[0]?.message?.content || "Sin respuesta.",
+      sources,
+    };
+  }
 
-  return {
-    text: responseText,
-    sources,
-  };
-}
-
-/**
- * Genera una respuesta RAG en modo Streaming
- */
-export async function generateRAGStream(
-  query: string,
-  contextChunks: ContextChunk[]
-) {
+  // Proveedor por defecto: Gemini
   const genAI = getGenAIClient();
   const model = genAI.getGenerativeModel({ 
     model: "gemini-3.8-flash",
@@ -155,25 +169,11 @@ export async function generateRAGStream(
     }
   });
 
-  const formattedContext = contextChunks
-    .map((chunk, index) => `[Fuente ${index + 1}] (URL: ${chunk.url}, H1: ${chunk.h1}):\n${chunk.text}`)
-    .join("\n\n---\n\n");
-
-  const systemPrompt = `Eres un asistente virtual experto y preciso.
-Tu objetivo es responder a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información de contexto proporcionada.
-
-Reglas Estrictas:
-1. Responde de forma clara, directa y estructurada en español.
-2. Basate EXCLUSIVAMENTE en el contexto proporcionado.
-3. Si la respuesta no está contenida en el contexto, di explícitamente: "Lo siento, esa información no se encuentra disponible en la documentación procesada de este sitio web."
-4. NO inventes ni asumas información fuera del contexto.
-
-CONTEXTO RECUPERADO:
-${formattedContext}
-
-PREGUNTA DEL USUARIO:
-${query}`;
-
-  const resultStream = await model.generateContentStream(systemPrompt);
-  return resultStream.stream;
+  const fullPrompt = `${systemPrompt}\n\nPREGUNTA DEL USUARIO:\n${query}`;
+  const result = await model.generateContent(fullPrompt);
+  
+  return {
+    text: result.response.text(),
+    sources,
+  };
 }
