@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata: Metadata = {
   title: "Scrapio - Sistema RAG Multi-Tenant",
@@ -12,10 +13,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="es">
+        <body className="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

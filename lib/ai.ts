@@ -1,18 +1,18 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 
-function getGenAIClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+function getGenAIClient(customApiKey?: string) {
+  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Falta la variable de entorno GEMINI_API_KEY");
+    throw new Error("Falta la API Key de Gemini. Ingresa tu clave en Ajustes de API o configúrala en el entorno.");
   }
   return new GoogleGenerativeAI(apiKey);
 }
 
-function getOpenAIClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
+function getOpenAIClient(customApiKey?: string) {
+  const apiKey = customApiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("Falta la variable de entorno OPENAI_API_KEY en Vercel/env.");
+    throw new Error("Falta la API Key de OpenAI. Ingresa tu clave en Ajustes de API o contacta al administrador.");
   }
   return new OpenAI({ apiKey });
 }
@@ -26,11 +26,16 @@ export interface ContextChunk {
 /**
  * Genera un vector embedding de 768 dimensiones soportando alternancia dinámica entre Gemini y OpenAI
  */
-export async function generateEmbedding(text: string, overrideProvider?: string, retries = 3): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  overrideProvider?: string,
+  retries = 3,
+  customApiKey?: string
+): Promise<number[]> {
   const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
 
   if (provider === "openai") {
-    const openai = getOpenAIClient();
+    const openai = getOpenAIClient(customApiKey);
     const res = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: text,
@@ -40,8 +45,9 @@ export async function generateEmbedding(text: string, overrideProvider?: string,
   }
 
   // Proveedor por defecto: Google Gemini
-  const genAI = getGenAIClient();
+  const genAI = getGenAIClient(customApiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
+
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -124,7 +130,8 @@ export async function generateEmbeddingsBatch(
 export async function generateRAGResponse(
   query: string,
   contextChunks: ContextChunk[],
-  overrideProvider?: string
+  overrideProvider?: string,
+  customApiKey?: string
 ): Promise<{ text: string; sources: string[] }> {
   const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
   const formattedContext = contextChunks
@@ -147,7 +154,7 @@ CONTEXTO RECUPERADO:
 ${formattedContext}`;
 
   if (provider === "openai") {
-    const openai = getOpenAIClient();
+    const openai = getOpenAIClient(customApiKey);
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
@@ -164,7 +171,7 @@ ${formattedContext}`;
   }
 
   // Proveedor por defecto: Gemini
-  const genAI = getGenAIClient();
+  const genAI = getGenAIClient(customApiKey);
   const model = genAI.getGenerativeModel({ 
     model: "gemini-3.8-flash",
     generationConfig: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExistingIndexedUrls } from "@/lib/pinecone";
 import { fetchSitemapUrls } from "@/lib/crawler";
+import { getScrapioUser } from "@/lib/auth";
 
 function inferDomain(namespace: string): string {
   const clean = namespace.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
@@ -11,6 +12,11 @@ function inferDomain(namespace: string): string {
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await getScrapioUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const namespace = searchParams.get("namespace");
 
@@ -18,6 +24,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { error: "El parámetro 'namespace' es obligatorio." },
         { status: 400 }
+      );
+    }
+
+    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+      return NextResponse.json(
+        { error: "No tienes permiso para ver este proyecto." },
+        { status: 403 }
       );
     }
 

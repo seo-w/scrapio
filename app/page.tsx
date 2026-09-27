@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { UserButton, useUser } from "@clerk/nextjs";
 import {
   Send,
   User,
@@ -25,6 +26,12 @@ import {
   CheckCircle2,
   Clock,
   Globe,
+  Key,
+  Users,
+  Lock,
+  Shield,
+  Save,
+  AlertCircle,
 } from "lucide-react";
 
 interface Message {
@@ -187,6 +194,29 @@ export default function Home() {
     }
   };
 
+  // Estado de Usuario Autenticado y Permisos
+  const { user: clerkUser } = useUser();
+  const [currentUserInfo, setCurrentUserInfo] = useState<{
+    userId?: string;
+    email: string;
+    name: string;
+    isAdmin: boolean;
+    allowedNamespaces: string[];
+    canUseOpenAI: boolean;
+  } | null>(null);
+
+  // Estado BYOK (Bring Your Own Key)
+  const [isByokModalOpen, setIsByokModalOpen] = useState(false);
+  const [customGeminiKey, setCustomGeminiKey] = useState("");
+  const [customOpenaiKey, setCustomOpenaiKey] = useState("");
+  const [byokSavedMessage, setByokSavedMessage] = useState(false);
+
+  // Estado Panel Administrador
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [isLoadingAdminUsers, setIsLoadingAdminUsers] = useState(false);
+  const [adminSuccessMsg, setAdminSuccessMsg] = useState("");
+
   // Pestañas del Modal de Conexión LLM
   const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
@@ -240,6 +270,84 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const fetchUserInfo = async () => {
+    try {
+      const res = await fetch("/api/me?t=" + Date.now());
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUserInfo(data.user);
+      }
+    } catch (err) {
+      console.error("Error cargando perfil del usuario:", err);
+    }
+  };
+
+  const fetchAdminUsers = async () => {
+    setIsLoadingAdminUsers(true);
+    try {
+      const res = await fetch("/api/admin/users?t=" + Date.now());
+      if (res.ok) {
+        const data = await res.json();
+        setAdminUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error("Error cargando usuarios en panel admin:", err);
+    } finally {
+      setIsLoadingAdminUsers(false);
+    }
+  };
+
+  const handleSaveByok = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("scrapio_byok_gemini", customGeminiKey.trim());
+      localStorage.setItem("scrapio_byok_openai", customOpenaiKey.trim());
+    }
+    setByokSavedMessage(true);
+    setTimeout(() => {
+      setByokSavedMessage(false);
+      setIsByokModalOpen(false);
+    }, 1200);
+  };
+
+  const handleUpdateUserPermissions = async (
+    userId: string,
+    allowedNamespaces: string[],
+    canUseOpenAI: boolean
+  ) => {
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, allowedNamespaces, canUseOpenAI }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Error al actualizar");
+      }
+      setAdminSuccessMsg("Permisos actualizados con éxito.");
+      setTimeout(() => setAdminSuccessMsg(""), 3000);
+      fetchAdminUsers();
+      fetchNamespaces();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`¿Eliminar al usuario ${userEmail}? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      fetchAdminUsers();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  };
+
   const fetchNamespaces = async () => {
     setIsLoadingNamespaces(true);
     try {
@@ -247,8 +355,11 @@ export default function Home() {
       const data = await res.json();
       if (res.ok && Array.isArray(data.namespaces)) {
         setAvailableNamespaces(data.namespaces);
-        if (data.namespaces.length > 0 && (!namespace || namespace === "cliente-avafin")) {
-          setNamespace(data.namespaces[0].name);
+        if (data.namespaces.length > 0) {
+          const exists = data.namespaces.some((n: NamespaceInfo) => n.name === namespace);
+          if (!exists || namespace === "cliente-avafin") {
+            setNamespace(data.namespaces[0].name);
+          }
         }
       }
     } catch (err) {
@@ -279,8 +390,13 @@ export default function Home() {
   };
 
   useEffect(() => {
+    fetchUserInfo();
     fetchNamespaces();
     checkIngestStatus();
+    if (typeof window !== "undefined") {
+      setCustomGeminiKey(localStorage.getItem("scrapio_byok_gemini") || "");
+      setCustomOpenaiKey(localStorage.getItem("scrapio_byok_openai") || "");
+    }
   }, []);
 
   useEffect(() => {
@@ -321,6 +437,8 @@ export default function Home() {
     setInputQuery("");
     setIsLoading(true);
 
+    const activeCustomKey = (aiProvider === "openai" ? customOpenaiKey : customGeminiKey).trim() || undefined;
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -329,6 +447,7 @@ export default function Home() {
           query: userMessage.content,
           namespace: namespace.trim(),
           aiProvider,
+          customApiKey: activeCustomKey,
         }),
       });
 
@@ -486,14 +605,42 @@ export default function Home() {
       >
         {/* Top Nav Container */}
         <div className="space-y-6">
-          {/* App Brand Logo */}
-          <div className="flex items-center gap-3 px-1">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
-              S
+          {/* App Brand Logo & User Session */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
+                  S
+                </div>
+                <div>
+                  <h1 className="font-bold text-lg leading-tight text-slate-900 tracking-tight">Scrapio</h1>
+                  <p className="text-base font-semibold text-slate-500 tracking-wider uppercase">WEB RAG</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <UserButton />
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-lg leading-tight text-slate-900 tracking-tight">Scrapio</h1>
-              <p className="text-base font-semibold text-slate-500 tracking-wider uppercase">WEB RAG</p>
+
+            {/* User Session Profile Card */}
+            <div className="bg-white border border-[#DCE4ED] rounded-xl p-3 flex items-center justify-between shadow-2xs">
+              <div className="overflow-hidden pr-2">
+                <div className="text-base font-bold text-slate-900 truncate">
+                  {currentUserInfo?.name || clerkUser?.fullName || "Usuario"}
+                </div>
+                <div className="text-sm font-mono text-slate-500 truncate">
+                  {currentUserInfo?.email || clerkUser?.primaryEmailAddress?.emailAddress || ""}
+                </div>
+              </div>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider shrink-0 border ${
+                  currentUserInfo?.isAdmin
+                    ? "bg-purple-50 text-purple-700 border-purple-200"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                }`}
+              >
+                {currentUserInfo?.isAdmin ? "Admin" : "Cliente"}
+              </span>
             </div>
           </div>
 
@@ -532,13 +679,15 @@ export default function Home() {
               </div>
             </div>
 
-            <button
-              onClick={openNewSiteModal}
-              className="mt-3 px-1 text-base font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span className="text-lg font-normal leading-none">+</span>
-              <span>Nuevo espacio de cliente</span>
-            </button>
+            {currentUserInfo?.isAdmin && (
+              <button
+                onClick={openNewSiteModal}
+                className="mt-3 px-1 text-base font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span className="text-lg font-normal leading-none">+</span>
+                <span>Nuevo espacio de cliente</span>
+              </button>
+            )}
           </div>
 
           {/* Work Section Menu Links */}
@@ -599,6 +748,39 @@ export default function Home() {
                 API
               </span>
             </button>
+
+            {/* Mis API Keys (BYOK) */}
+            <button
+              onClick={() => setIsByokModalOpen(true)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Key className="w-5 h-5 text-amber-600" />
+                <span>Mis API Keys</span>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                {customGeminiKey || customOpenaiKey ? "BYOK Activo" : "BYOK"}
+              </span>
+            </button>
+
+            {/* Panel de Gestión de Usuarios (Sólo Admin) */}
+            {currentUserInfo?.isAdmin && (
+              <button
+                onClick={() => {
+                  setIsAdminModalOpen(true);
+                  fetchAdminUsers();
+                }}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-purple-700 hover:bg-purple-100/60 font-semibold text-base transition-colors cursor-pointer border border-purple-200 bg-purple-50/50"
+              >
+                <div className="flex items-center gap-3">
+                  <Users className="w-5 h-5 text-purple-600" />
+                  <span>Gestión Usuarios</span>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">
+                  Admin
+                </span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -941,21 +1123,60 @@ export default function Home() {
                     }`}
                   >
                     <span>Gemini 3.8 Flash</span>
+                    {customGeminiKey.trim() && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
+                        BYOK
+                      </span>
+                    )}
                     {aiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-white"></span>}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setAiProvider("openai")}
-                    className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
-                      aiProvider === "openai"
-                        ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
-                        : "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
-                    }`}
-                  >
-                    <span>OpenAI GPT-4o Mini</span>
-                    {aiProvider === "openai" && <span className="w-2 h-2 rounded-full bg-white"></span>}
-                  </button>
+                  {(() => {
+                    const hasAccess = Boolean(
+                      currentUserInfo?.isAdmin ||
+                      currentUserInfo?.canUseOpenAI ||
+                      customOpenaiKey.trim()
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (hasAccess) {
+                            setAiProvider("openai");
+                          } else {
+                            setIsByokModalOpen(true);
+                          }
+                        }}
+                        title={
+                          hasAccess
+                            ? "Modelo OpenAI GPT-4o Mini disponible"
+                            : "Restringido por el administrador. Haz clic para ingresar tu propia API Key (BYOK) y desbloquearlo."
+                        }
+                        className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                          aiProvider === "openai"
+                            ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
+                            : hasAccess
+                            ? "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
+                            : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200/60"
+                        }`}
+                      >
+                        {!hasAccess && <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                        <span>OpenAI GPT-4o Mini</span>
+                        {customOpenaiKey.trim() && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
+                            BYOK
+                          </span>
+                        )}
+                        {!hasAccess && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">
+                            Requiere Key
+                          </span>
+                        )}
+                        {aiProvider === "openai" && <span className="w-2 h-2 rounded-full bg-white"></span>}
+                      </button>
+                    );
+                  })()}
 
                   <button
                     type="button"
@@ -1612,6 +1833,342 @@ export default function Home() {
                 No se pudo cargar la información de URLs.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Mis API Keys (BYOK) */}
+      {isByokModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsByokModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold">
+                <Key className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Mis API Keys (BYOK)</h3>
+                <p className="text-base text-slate-500">
+                  Usa tus propias credenciales para consultas ilimitadas.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveByok} className="space-y-4">
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-base text-amber-900 leading-relaxed">
+                Tus claves se guardan localmente en tu navegador. Al ingresar tu propia API Key de OpenAI, podrás usar el modelo <strong>GPT-4o Mini</strong> de forma directa e independiente.
+              </div>
+
+              <div>
+                <label className="block text-base font-semibold text-slate-800 mb-1">
+                  Google Gemini API Key
+                </label>
+                <input
+                  type="password"
+                  value={customGeminiKey}
+                  onChange={(e) => setCustomGeminiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full px-3.5 py-2.5 text-base border border-slate-300 rounded-xl bg-slate-50 focus:bg-white font-mono outline-none"
+                />
+                <span className="text-xs text-slate-500 mt-1 block">
+                  Opcional. Si la dejas vacía, se utilizará la clave de Gemini del sistema.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-base font-semibold text-slate-800 mb-1">
+                  OpenAI API Key
+                </label>
+                <input
+                  type="password"
+                  value={customOpenaiKey}
+                  onChange={(e) => setCustomOpenaiKey(e.target.value)}
+                  placeholder="sk-proj-..."
+                  className="w-full px-3.5 py-2.5 text-base border border-slate-300 rounded-xl bg-slate-50 focus:bg-white font-mono outline-none"
+                />
+                <span className="text-xs text-slate-500 mt-1 block">
+                  Permite activar OpenAI GPT-4o Mini incluso si no está habilitado por el administrador.
+                </span>
+              </div>
+
+              {byokSavedMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-base font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <span>Claves guardadas exitosamente en tu navegador.</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomGeminiKey("");
+                    setCustomOpenaiKey("");
+                    if (typeof window !== "undefined") {
+                      localStorage.removeItem("scrapio_byok_gemini");
+                      localStorage.removeItem("scrapio_byok_openai");
+                    }
+                    alert("Claves eliminadas del almacenamiento local.");
+                  }}
+                  className="px-4 py-2 text-base text-slate-600 hover:text-red-600 font-semibold cursor-pointer"
+                >
+                  Restablecer
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsByokModalOpen(false)}
+                    className="px-4 py-2 border border-slate-300 rounded-xl text-base font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base px-5 py-2 rounded-xl shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Guardar Claves</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Panel Administrador - Gestión de Usuarios y Proyectos */}
+      {isAdminModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-4xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setIsAdminModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center font-bold">
+                <Users className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Panel de Administración de Usuarios</h3>
+                <p className="text-base text-slate-500">
+                  Asigna proyectos a cada usuario y autoriza acceso a modelos de IA. Un proyecto puede estar asignado a múltiples usuarios.
+                </p>
+              </div>
+            </div>
+
+            {adminSuccessMsg && (
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-base font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span>{adminSuccessMsg}</span>
+              </div>
+            )}
+
+            {isLoadingAdminUsers ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                <span className="text-base text-slate-600 font-medium">
+                  Cargando usuarios desde Clerk...
+                </span>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {adminUsers.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 text-base">
+                    No hay otros usuarios registrados en el sistema.
+                  </div>
+                ) : (
+                  adminUsers.map((u) => {
+                    const isSelf = u.id === currentUserInfo?.userId || u.email.toLowerCase() === (currentUserInfo?.email || "").toLowerCase();
+
+                    return (
+                      <div
+                        key={u.id}
+                        className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors space-y-3"
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-900 text-white font-bold text-base flex items-center justify-center">
+                              {(u.firstName?.[0] || u.email?.[0] || "U").toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-base font-bold text-slate-900 flex items-center gap-2">
+                                <span>{u.firstName || u.lastName ? `${u.firstName} ${u.lastName}`.trim() : "Usuario"}</span>
+                                {isSelf && (
+                                  <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold">
+                                    Tú
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm font-mono text-slate-500">{u.email}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                                u.role === "admin"
+                                  ? "bg-purple-100 text-purple-800 border-purple-300"
+                                  : "bg-blue-50 text-blue-700 border-blue-200"
+                              }`}
+                            >
+                              {u.role === "admin" ? "Administrador" : "Usuario"}
+                            </span>
+
+                            {!isSelf && (
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.email)}
+                                title="Eliminar usuario"
+                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Configuración de Permisos */}
+                        <div className="pt-2 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Permiso de Proyectos */}
+                          <div>
+                            <span className="block text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                              Proyectos / Namespaces Asignados:
+                            </span>
+                            {u.role === "admin" ? (
+                              <div className="text-sm text-purple-700 font-semibold bg-purple-50 p-2 rounded-lg border border-purple-200">
+                                ⭐ Acceso total a todos los proyectos del sistema.
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5 max-h-36 overflow-y-auto p-2 bg-white rounded-lg border border-slate-200">
+                                {availableNamespaces.map((ns) => {
+                                  const isAssigned = (u.allowedNamespaces || []).includes(ns.name);
+                                  return (
+                                    <label
+                                      key={ns.name}
+                                      className="flex items-center gap-2 text-base text-slate-800 hover:bg-slate-50 p-1 rounded cursor-pointer"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isAssigned}
+                                        onChange={(e) => {
+                                          const nextNamespaces = e.target.checked
+                                            ? [...(u.allowedNamespaces || []), ns.name]
+                                            : (u.allowedNamespaces || []).filter((n: string) => n !== ns.name);
+
+                                          // Actualizar estado local inmediatamente
+                                          setAdminUsers((prev) =>
+                                            prev.map((item) =>
+                                              item.id === u.id
+                                                ? { ...item, allowedNamespaces: nextNamespaces }
+                                                : item
+                                            )
+                                          );
+                                        }}
+                                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <span className="font-mono text-sm">{ns.name}</span>
+                                      <span className="text-xs text-slate-500">
+                                        ({getClientDisplayName(ns.name)})
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Permiso de Modelos */}
+                          <div className="space-y-3">
+                            <span className="block text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                              Permisos de Modelos de IA:
+                            </span>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-lg">
+                                <div>
+                                  <div className="text-sm font-bold text-emerald-950">Gemini 3.8 Flash</div>
+                                  <div className="text-xs text-emerald-700">Por defecto para todos</div>
+                                </div>
+                                <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                                  Habilitado
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg">
+                                <div>
+                                  <div className="text-sm font-bold text-slate-900">OpenAI GPT-4o Mini</div>
+                                  <div className="text-xs text-slate-500">Uso de saldo del sistema</div>
+                                </div>
+                                {u.role === "admin" ? (
+                                  <span className="text-xs font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
+                                    Ilimitado (Admin)
+                                  </span>
+                                ) : (
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(u.canUseOpenAI)}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setAdminUsers((prev) =>
+                                          prev.map((item) =>
+                                            item.id === u.id
+                                              ? { ...item, canUseOpenAI: checked }
+                                              : item
+                                          )
+                                        );
+                                      }}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                  </label>
+                                )}
+                              </div>
+                            </div>
+
+                            {u.role !== "admin" && (
+                              <button
+                                onClick={() =>
+                                  handleUpdateUserPermissions(
+                                    u.id,
+                                    u.allowedNamespaces || [],
+                                    Boolean(u.canUseOpenAI)
+                                  )
+                                }
+                                className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm py-2 px-3 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                <Save className="w-4 h-4" />
+                                <span>Guardar cambios para {u.firstName || u.email.split("@")[0]}</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-sm text-slate-500">
+                Los cambios aplican de inmediato en la sesión del usuario.
+              </span>
+              <button
+                onClick={() => setIsAdminModalOpen(false)}
+                className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
