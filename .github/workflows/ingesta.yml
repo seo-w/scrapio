@@ -43,4 +43,5 @@ jobs:
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME || 'scrapio' }}
           AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'gemini' }}
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+          SCRAPIO_API_URL: ${{ secrets.SCRAPIO_API_URL || 'https://scrapio-one.vercel.app' }}
         run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }} --provider "${{ github.event.inputs.ai_provider }}"

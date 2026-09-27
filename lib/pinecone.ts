@@ -87,3 +87,33 @@ export async function deleteNamespace(namespace: string) {
   await ns.deleteAll();
   return { success: true };
 }
+
+/**
+ * Obtiene el conjunto de URLs que ya fueron indexadas en un namespace
+ */
+export async function getExistingIndexedUrls(namespace: string): Promise<Set<string>> {
+  try {
+    const index = getPineconeIndex();
+    const ns = index.namespace(namespace);
+    const existing = new Set<string>();
+
+    const queryResponse = await ns.query({
+      vector: new Array(768).fill(0),
+      topK: 10000,
+      includeMetadata: true,
+    });
+
+    if (queryResponse.matches) {
+      for (const match of queryResponse.matches) {
+        if (match.metadata && (match.metadata as any).url) {
+          existing.add((match.metadata as any).url);
+        }
+      }
+    }
+    return existing;
+  } catch (err: any) {
+    console.warn("⚠️ No se pudieron consultar URLs previas en Pinecone:", err.message);
+    return new Set<string>();
+  }
+}
+

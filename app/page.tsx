@@ -46,6 +46,12 @@ interface IngestStatus {
   currentStepName: string;
   htmlUrl?: string;
   updatedAt?: string;
+  processedUrls?: number;
+  totalUrls?: number;
+  remainingUrls?: number;
+  currentUrl?: string;
+  quotaExhausted?: boolean;
+  provider?: string;
 }
 
 const inferUrlFromNamespace = (nsName: string) => {
@@ -657,7 +663,18 @@ export default function Home() {
             {ingestStatus?.status === "in_progress" ? (
               <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-base font-semibold border border-[#FDE68A]">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                <span>1 rastreo en curso · {ingestStatus.progressPercent}%</span>
+                <span>
+                  {ingestStatus.totalUrls && ingestStatus.totalUrls > 0
+                    ? `1 rastreo en curso · ${ingestStatus.processedUrls || 0} de ${ingestStatus.totalUrls} URLs (${ingestStatus.progressPercent}%) · Faltan ${ingestStatus.remainingUrls ?? 0}`
+                    : `1 rastreo en curso · ${ingestStatus.progressPercent}%`}
+                </span>
+              </div>
+            ) : ingestStatus?.quotaExhausted ? (
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-50 text-amber-900 text-base font-semibold border border-amber-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
+                <span>
+                  Límite de tokens alcanzado · {ingestStatus.processedUrls} de {ingestStatus.totalUrls} URLs indexadas · Faltan {ingestStatus.remainingUrls} en cola
+                </span>
               </div>
             ) : (
               <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 text-emerald-800 text-base font-semibold border border-emerald-200">

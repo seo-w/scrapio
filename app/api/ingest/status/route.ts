@@ -1,4 +1,38 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+interface LiveProgress {
+  processedUrls: number;
+  totalUrls: number;
+  remainingUrls: number;
+  currentUrl: string;
+  provider: string;
+  quotaExhausted: boolean;
+  updatedAt: number;
+}
+
+let liveProgress: LiveProgress | null = null;
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const total = body.totalUrls || 0;
+    const processed = body.processedUrls || 0;
+
+    liveProgress = {
+      processedUrls: processed,
+      totalUrls: total,
+      remainingUrls: Math.max(0, total - processed),
+      currentUrl: body.currentUrl || "",
+      provider: body.provider || "gemini",
+      quotaExhausted: !!body.quotaExhausted,
+      updatedAt: Date.now(),
+    };
+
+    return NextResponse.json({ success: true, liveProgress });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+}
 
 export async function GET() {
   try {
@@ -40,34 +74,40 @@ export async function GET() {
     let progressPercent = 0;
     let currentStepName = "Iniciando proceso...";
 
+    const isLiveRecent = liveProgress && Date.now() - liveProgress.updatedAt < 1000 * 60 * 10; // últimos 10 minutos
+
     if (latestRun.status === "completed") {
       progressPercent = 100;
       currentStepName = latestRun.conclusion === "success" 
         ? "✅ Ingesta finalizada exitosamente" 
         : "❌ Ingesta finalizada con error";
     } else if (latestRun.status === "in_progress") {
-      // Intentar obtener el detalle del job para calcular el porcentaje real
-      try {
-        const jobsRes = await fetch(latestRun.jobs_url, { headers, cache: "no-store" });
-        if (jobsRes.ok) {
-          const jobsData = await jobsRes.json();
-          const mainJob = jobsData.jobs?.[0];
-          if (mainJob && Array.isArray(mainJob.steps)) {
-            const steps = mainJob.steps;
-            const completedSteps = steps.filter((s: any) => s.status === "completed").length;
-            const activeStep = steps.find((s: any) => s.status === "in_progress");
+      if (isLiveRecent && liveProgress!.totalUrls > 0) {
+        progressPercent = Math.min(99, Math.round((liveProgress!.processedUrls / liveProgress!.totalUrls) * 100));
+        currentStepName = `URL ${liveProgress!.processedUrls}/${liveProgress!.totalUrls} (${liveProgress!.currentUrl})`;
+      } else {
+        try {
+          const jobsRes = await fetch(latestRun.jobs_url, { headers, cache: "no-store" });
+          if (jobsRes.ok) {
+            const jobsData = await jobsRes.json();
+            const mainJob = jobsData.jobs?.[0];
+            if (mainJob && Array.isArray(mainJob.steps)) {
+              const steps = mainJob.steps;
+              const completedSteps = steps.filter((s: any) => s.status === "completed").length;
+              const activeStep = steps.find((s: any) => s.status === "in_progress");
 
-            progressPercent = Math.min(95, Math.round((completedSteps / Math.max(steps.length, 5)) * 100));
-            if (activeStep) {
-              currentStepName = `⚙️ ${activeStep.name}...`;
-            } else {
-              currentStepName = "🌐 Procesando crawler e embeddings...";
+              progressPercent = Math.min(95, Math.round((completedSteps / Math.max(steps.length, 5)) * 100));
+              if (activeStep) {
+                currentStepName = `⚙️ ${activeStep.name}...`;
+              } else {
+                currentStepName = "🌐 Procesando crawler e embeddings...";
+              }
             }
           }
+        } catch {
+          progressPercent = 50;
+          currentStepName = "🌐 Ingesta en progreso en GitHub Actions...";
         }
-      } catch (err) {
-        progressPercent = 50;
-        currentStepName = "🌐 Ingesta en progreso en GitHub Actions...";
       }
     } else {
       progressPercent = 10;
@@ -85,6 +125,12 @@ export async function GET() {
       htmlUrl: latestRun.html_url,
       progressPercent,
       currentStepName,
+      processedUrls: isLiveRecent ? liveProgress?.processedUrls : undefined,
+      totalUrls: isLiveRecent ? liveProgress?.totalUrls : undefined,
+      remainingUrls: isLiveRecent ? liveProgress?.remainingUrls : undefined,
+      currentUrl: isLiveRecent ? liveProgress?.currentUrl : undefined,
+      quotaExhausted: isLiveRecent ? liveProgress?.quotaExhausted : undefined,
+      provider: isLiveRecent ? liveProgress?.provider : undefined,
     });
   } catch (error: any) {
     console.error("Error en GET /api/ingest/status:", error);

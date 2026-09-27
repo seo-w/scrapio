@@ -3,15 +3,33 @@ dotenv.config({ path: ".env.local" });
 
 import { crawlDomain } from "../lib/crawler";
 import { generateEmbeddingsBatch } from "../lib/ai";
-import { upsertToPinecone, UpsertItem } from "../lib/pinecone";
+import { upsertToPinecone, UpsertItem, getExistingIndexedUrls } from "../lib/pinecone";
 import crypto from "crypto";
+
+async function reportProgress(data: {
+  processedUrls: number;
+  totalUrls: number;
+  currentUrl: string;
+  provider: string;
+  quotaExhausted?: boolean;
+}) {
+  const apiUrl = process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
+  try {
+    await fetch(`${apiUrl}/api/ingest/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    // Si no hay conectividad externa, continuamos localmente sin abortar
+  }
+}
 
 async function main() {
   const args = process.argv.slice(2);
   let targetUrl = process.env.TARGET_URL || "https://avafin.mx";
   let namespace = process.env.CLIENT_NAMESPACE || "cliente-avafin";
   let maxPages = 20;
-
   let provider = process.env.AI_PROVIDER || "gemini";
 
   for (let i = 0; i < args.length; i++) {
@@ -22,18 +40,18 @@ async function main() {
   }
 
   console.log("==========================================");
-  console.log("🚀 SCRAPIO INGESTION PIPELINE");
+  console.log("🚀 SCRAPIO INGESTION PIPELINE (PONYTAIL MODE)");
   console.log(`URL Base: ${targetUrl}`);
   console.log(`Namespace: ${namespace}`);
   console.log(`Máximo de Páginas: ${maxPages}`);
-  console.log(`Proveedor IA Embeddings: ${provider.toUpperCase()}`);
+  console.log(`Proveedor IA: ${provider.toUpperCase()}`);
   console.log("==========================================");
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY && process.env.GEMINI_API_KEY) {
-    console.warn("⚠️ Falta OPENAI_API_KEY en secretos de GitHub. Alternando a Gemini.");
+    console.warn("⚠️ Falta OPENAI_API_KEY en secretos. Alternando a Gemini.");
     provider = "gemini";
   } else if (provider === "gemini" && !process.env.GEMINI_API_KEY && process.env.OPENAI_API_KEY) {
-    console.warn("⚠️ Falta GEMINI_API_KEY en secretos de GitHub. Alternando a OpenAI.");
+    console.warn("⚠️ Falta GEMINI_API_KEY en secretos. Alternando a OpenAI.");
     provider = "openai";
   }
 
@@ -43,12 +61,12 @@ async function main() {
   }
 
   if (!process.env.PINECONE_API_KEY) {
-    console.error("❌ ERROR CRÍTICO: No se encontró la variable PINECONE_API_KEY en los secretos del repositorio de GitHub.");
+    console.error("❌ ERROR CRÍTICO: No se encontró PINECONE_API_KEY.");
     process.exit(1);
   }
 
-  // 1. Rastreo y Extracción
-  console.log(`🌐 Iniciando fase 1: Rastreo de dominio...`);
+  // 1. Rastreo de dominio
+  console.log(`🌐 Fase 1: Rastreo y descubrimiento de URLs...`);
   const chunks = await crawlDomain({
     startUrl: targetUrl,
     maxPages,
@@ -58,49 +76,124 @@ async function main() {
   });
 
   if (chunks.length === 0) {
-    console.error("❌ No se pudieron extraer chunks de contenido del sitio especificado.");
+    console.error("❌ No se pudieron extraer chunks de contenido.");
     process.exit(1);
   }
 
-  console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings con ${provider.toUpperCase()} (${chunks.length} chunks)...`);
+  // Agrupar chunks por URL para rastrear progreso página por página
+  const urlsMap = new Map<string, typeof chunks>();
+  for (const chunk of chunks) {
+    if (!urlsMap.has(chunk.url)) urlsMap.set(chunk.url, []);
+    urlsMap.get(chunk.url)!.push(chunk);
+  }
+  const uniqueUrls = Array.from(urlsMap.keys());
+  console.log(`📊 URLs únicas encontradas: ${uniqueUrls.length}`);
 
-  const chunkTexts = chunks.map((c) => c.text);
-  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, provider, 3, 350);
+  // 2. Comprobar qué URLs ya existen en Pinecone para este namespace
+  console.log(`🔎 Verificando URLs previamente indexadas en Pinecone (namespace: '${namespace}')...`);
+  const existingUrls = await getExistingIndexedUrls(namespace);
+  console.log(`💾 URLs ya indexadas previamente: ${existingUrls.size}`);
 
-  const upsertItems: UpsertItem[] = [];
+  const pendingUrls = uniqueUrls.filter((url) => !existingUrls.has(url));
+  console.log(`🎯 URLs pendientes por procesar: ${pendingUrls.length}`);
 
-  for (let i = 0; i < processedCount; i++) {
-    const chunk = chunks[i];
-    const vector = vectors[i];
-    
-    const idHash = crypto.createHash("md5").update(`${chunk.url}#${i}`).digest("hex");
-    
-    upsertItems.push({
-      id: `${namespace}-${idHash}`,
-      values: vector,
-      metadata: {
-        url: chunk.url,
-        h1: chunk.h1,
-        text_chunk: chunk.text,
-        client_namespace: namespace,
-        createdAt: new Date().toISOString(),
-      },
+  if (pendingUrls.length === 0) {
+    console.log("✅ ¡Todas las URLs descubiertas ya están indexadas en Pinecone! Nada pendiente.");
+    await reportProgress({
+      processedUrls: uniqueUrls.length,
+      totalUrls: uniqueUrls.length,
+      currentUrl: "Completado",
+      provider,
+      quotaExhausted: false,
     });
+    return;
   }
 
-  // 2. Cargar en Pinecone bajo el Namespace específico
-  if (upsertItems.length > 0) {
-    console.log(`\n📤 Iniciando fase 3: Carga de ${upsertItems.length} vectores en Pinecone (namespace: '${namespace}')...`);
-    await upsertToPinecone(namespace, upsertItems);
+  // 3. Procesar URLs pendientes una a una con reporte en vivo
+  console.log(`\n🧠 Fase 2: Procesamiento e inserción de embeddings con ${provider.toUpperCase()}...`);
+  let quotaExhausted = false;
+  let totalVectorsUpserted = 0;
+
+  for (let i = 0; i < pendingUrls.length; i++) {
+    const url = pendingUrls[i];
+    const urlChunks = urlsMap.get(url)!;
+    const currentTotalProcessed = existingUrls.size + i + 1;
+    const remainingCount = uniqueUrls.length - currentTotalProcessed;
+    const pct = Math.round((currentTotalProcessed / uniqueUrls.length) * 100);
+
+    console.log(
+      `[${provider.toUpperCase()}] URL ${currentTotalProcessed}/${uniqueUrls.length} (${pct}%) -> ${url} | Faltan ${remainingCount} URLs`
+    );
+
+    await reportProgress({
+      processedUrls: currentTotalProcessed,
+      totalUrls: uniqueUrls.length,
+      currentUrl: url,
+      provider,
+      quotaExhausted: false,
+    });
+
+    const chunkTexts = urlChunks.map((c) => c.text);
+    const { vectors, processedCount, quotaExhausted: isExhausted } = await generateEmbeddingsBatch(
+      chunkTexts,
+      provider,
+      3,
+      350
+    );
+
+    const upsertItems: UpsertItem[] = [];
+    for (let j = 0; j < processedCount; j++) {
+      const chunk = urlChunks[j];
+      const vector = vectors[j];
+      const idHash = crypto.createHash("md5").update(`${chunk.url}#${j}`).digest("hex");
+
+      upsertItems.push({
+        id: `${namespace}-${idHash}`,
+        values: vector,
+        metadata: {
+          url: chunk.url,
+          h1: chunk.h1,
+          text_chunk: chunk.text,
+          client_namespace: namespace,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (upsertItems.length > 0) {
+      await upsertToPinecone(namespace, upsertItems);
+      totalVectorsUpserted += upsertItems.length;
+    }
+
+    if (isExhausted) {
+      quotaExhausted = true;
+      const urlsInQueue = pendingUrls.length - (i + 1);
+      console.log(`\n⚠️ LÍMITE DE CUOTA DE ${provider.toUpperCase()} ALCANZADO.`);
+      console.log(`Se guardaron exitosamente los vectores hasta la URL actual.`);
+      console.log(`Quedan ${urlsInQueue} URLs en cola para cuando se renueven los tokens.`);
+
+      await reportProgress({
+        processedUrls: currentTotalProcessed,
+        totalUrls: uniqueUrls.length,
+        currentUrl: url,
+        provider,
+        quotaExhausted: true,
+      });
+      break;
+    }
   }
 
+  console.log("==========================================");
   if (quotaExhausted) {
-    console.log(`\n⚠️ INGESTA PARCIAL COMPLETADA (LÍMITE DE CUOTA DE GEMINI ALCANZADO)`);
-    console.log(`Se guardaron exitosamente ${upsertItems.length} vectores procesados en Pinecone bajo el namespace '${namespace}'.`);
+    console.log(`⚠️ INGESTA PAUSADA POR LÍMITE DE CUOTA DE GEMINI`);
+    console.log(`Vectores agregados en esta sesión: ${totalVectorsUpserted}`);
+    console.log(`Las URLs restantes quedan en cola y continuarán automáticamente en la próxima ejecución.`);
   } else {
-    console.log(`\n🎉 INGESTA COMPLETADA CON ÉXITO!`);
-    console.log(`Los datos de '${targetUrl}' ahora están disponibles aislados en el namespace: '${namespace}' (${upsertItems.length} vectores cargados)`);
+    console.log(`🎉 INGESTA COMPLETADA EXITOSAMENTE AL 100%!`);
+    console.log(`Total de URLs en el sitio: ${uniqueUrls.length}`);
+    console.log(`Vectores nuevos cargados en Pinecone: ${totalVectorsUpserted}`);
   }
+  console.log("==========================================");
 }
 
 main().catch((err) => {
