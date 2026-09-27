@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle } from "lucide-react";
+import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle, Trash2 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -87,6 +87,32 @@ export default function Home() {
       return "https://www.avafin.mx";
     }
     return `https://www.${clean}.com`;
+  };
+
+  const handleDeleteNamespace = async (nsToDelete: string) => {
+    if (!nsToDelete || nsToDelete === "__manual__") return;
+    if (!confirm(`¿Estás seguro de borrar todos los vectores del sitio '${nsToDelete}' de Pinecone?`)) return;
+
+    try {
+      const res = await fetch(`/api/namespaces?namespace=${encodeURIComponent(nsToDelete)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al borrar namespace");
+
+      setActiveAlert({
+        type: "info",
+        title: "Sitio Borrado Exitosamente",
+        message: `El namespace '${nsToDelete}' ha sido eliminado de Pinecone.`,
+      });
+      fetchNamespaces();
+    } catch (err: any) {
+      setActiveAlert({
+        type: "error",
+        title: "Error al Borrar Sitio",
+        message: err.message,
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -331,6 +357,16 @@ export default function Home() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNamespaces ? "animate-spin" : ""}`} />
             </button>
+
+            {namespace && namespace !== "__manual__" && (
+              <button
+                onClick={() => handleDeleteNamespace(namespace)}
+                title={`Borrar el sitio '${namespace}' de Pinecone`}
+                className="p-1 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </header>

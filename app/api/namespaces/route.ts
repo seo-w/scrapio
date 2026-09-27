@@ -24,3 +24,31 @@ export async function GET() {
     );
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const namespace = searchParams.get("namespace");
+
+    if (!namespace) {
+      return NextResponse.json(
+        { error: "El parámetro 'namespace' es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    const { deleteNamespace } = await import("@/lib/pinecone");
+    await deleteNamespace(namespace);
+
+    return NextResponse.json({
+      success: true,
+      message: `El namespace '${namespace}' ha sido eliminado exitosamente de Pinecone.`,
+    });
+  } catch (error: any) {
+    console.error("Error en DELETE /api/namespaces:", error);
+    return NextResponse.json(
+      { error: error.message || "Error al eliminar el namespace en Pinecone." },
+      { status: 500 }
+    );
+  }
+}

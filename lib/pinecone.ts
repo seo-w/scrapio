@@ -77,3 +77,13 @@ export async function getIndexStats() {
   const stats = await index.describeIndexStats();
   return stats;
 }
+
+/**
+ * Elimina todos los vectores contenidos en un namespace específico
+ */
+export async function deleteNamespace(namespace: string) {
+  const index = getPineconeIndex();
+  const ns = index.namespace(namespace);
+  await ns.deleteAll();
+  return { success: true };
+}
