@@ -61,6 +61,16 @@ export default function Home() {
     fetchNamespaces();
   }, []);
 
+  // Función para adivinar/auto-rellenar la URL según el namespace seleccionado
+  const inferUrlFromNamespace = (nsName: string) => {
+    if (!nsName) return "";
+    const clean = nsName.toLowerCase().replace(/^cliente-/, "");
+    if (clean.includes("avafin")) {
+      return "https://www.avafin.mx";
+    }
+    return `https://www.${clean}.com`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputQuery.trim() || isLoading) return;
@@ -158,14 +168,10 @@ export default function Home() {
     }
   };
 
-  // Abrir modal preparado para re-escanear/actualizar el sitio actual con auto-relleno inteligente de URL
   const openUpdateModal = () => {
-    setScanNamespace(namespace);
-    if (namespace.toLowerCase().includes("avafin")) {
-      setScanUrl("https://www.avafin.mx");
-    } else {
-      setScanUrl(`https://www.${namespace.replace(/^cliente-/, "")}.com`);
-    }
+    const targetNs = namespace || (availableNamespaces.length > 0 ? availableNamespaces[0].name : "cliente-avafin");
+    setScanNamespace(targetNs);
+    setScanUrl(inferUrlFromNamespace(targetNs));
     setScanStatus(null);
     setIsModalOpen(true);
   };
@@ -204,10 +210,10 @@ export default function Home() {
             <span>➕ Nuevo Sitio</span>
           </button>
 
-          {/* Botón 2: Actualizar / Re-escanear Sitio Activo */}
+          {/* Botón 2: Actualizar / Re-escanear Sitio */}
           <button
             onClick={openUpdateModal}
-            title="Re-escanear o actualizar datos del sitio seleccionado"
+            title="Re-escanear o actualizar un proyecto existente"
             className="flex items-center gap-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all"
           >
             <RefreshCw className="w-4 h-4 text-amber-400" />
@@ -387,6 +393,42 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleStartScan} className="space-y-4">
+              {/* Selección del Namespace/Proyecto en el Modal */}
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Proyecto / Namespace a Procesar
+                </label>
+                {availableNamespaces.length > 0 ? (
+                  <select
+                    disabled={scanStatus?.type === "success"}
+                    value={scanNamespace}
+                    onChange={(e) => {
+                      const selectedNs = e.target.value;
+                      setScanNamespace(selectedNs);
+                      setScanUrl(inferUrlFromNamespace(selectedNs));
+                    }}
+                    className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60 mb-2"
+                  >
+                    <option value="">-- Selecciona un proyecto existente --</option>
+                    {availableNamespaces.map((ns) => (
+                      <option key={ns.name} value={ns.name}>
+                        {ns.name} ({ns.vectorCount} vectores activos)
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+
+                <input
+                  type="text"
+                  required
+                  disabled={scanStatus?.type === "success"}
+                  value={scanNamespace}
+                  onChange={(e) => setScanNamespace(e.target.value)}
+                  placeholder="o escribe un nuevo namespace (ej. cliente-libranza)"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   URL Base a Escanear
@@ -398,21 +440,6 @@ export default function Home() {
                   value={scanUrl}
                   onChange={(e) => setScanUrl(e.target.value)}
                   placeholder="https://ejemplo.com"
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Namespace del Cliente (Aislamiento Multi-Tenant)
-                </label>
-                <input
-                  type="text"
-                  required
-                  disabled={scanStatus?.type === "success"}
-                  value={scanNamespace}
-                  onChange={(e) => setScanNamespace(e.target.value)}
-                  placeholder="ej. cliente-libranza"
                   className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
                 />
               </div>
