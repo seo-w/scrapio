@@ -48,25 +48,92 @@ interface IngestStatus {
   updatedAt?: string;
 }
 
+const inferUrlFromNamespace = (nsName: string) => {
+  const clean = nsName.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
+  if (clean.includes("avafin")) return "https://www.avafin.mx";
+  if (clean.includes("personalbliss")) return "https://personalbliss.org";
+  return `https://www.${clean.replace(/_/g, "-")}.com`;
+};
+
+const getClientDisplayName = (ns: string): string => {
+  if (!ns) return "Personal Bliss";
+  const clean = ns.replace(/^cliente-/, "").replace(/^pb_/, "").replace(/_/g, " ").replace(/-/g, " ");
+  return clean
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
+const getClientDomain = (ns: string): string => {
+  if (!ns) return "personalbliss.org";
+  const clean = ns.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
+  if (clean.includes("avafin")) return "avafin.mx";
+  if (clean.includes("personalbliss")) return "personalbliss.org";
+  return `${clean.replace(/_/g, "-")}.com`;
+};
+
+const getClientInitials = (ns: string): string => {
+  const name = getClientDisplayName(ns);
+  const parts = name.split(" ");
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+};
+
+const formatUrlDisplay = (url: string): string => {
+  try {
+    const u = new URL(url);
+    return `${u.hostname}${u.pathname}`;
+  } catch {
+    return url;
+  }
+};
+
+const extractTitleFromUrl = (url: string): string => {
+  try {
+    const u = new URL(url);
+    const slug = u.pathname.split("/").filter(Boolean).pop();
+    if (!slug) return u.hostname;
+    return slug
+      .replace(/[-_]/g, " ")
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  } catch {
+    return "Página Indexada";
+  }
+};
+
+const getWelcomeMessage = (ns: string): Message => ({
+  id: "welcome-" + ns,
+  role: "assistant",
+  content: `Conectado al conocimiento indexado de **${getClientDisplayName(ns)}** (\`${ns}\`). Las respuestas son sintetizadas exclusivamente desde su base vectorial de Pinecone. ¿Qué deseas consultar sobre este sitio?`,
+  sources: [],
+  tokens: 0,
+  duration: "0,0 s",
+});
+
 export default function Home() {
   const [namespace, setNamespace] = useState("cliente-avafin");
   const [aiProvider, setAiProvider] = useState("gemini");
   const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
   const [inputQuery, setInputQuery] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content:
-        "Las respuestas son sintetizadas exclusivamente desde el contenido indexado en tu base vectorial de Pinecone. Puedes consultar políticas, servicios, condiciones o banners de conversión.",
-      sources: [
-        "https://www.avafin.mx/blog/gastos-de-independizarse",
-        "https://www.avafin.mx/blog/como-hacer-un-presupuesto",
-      ],
-      tokens: 1284,
-      duration: "1,8 s",
-    },
-  ]);
+  
+  // Historial de mensajes aislado por cada namespace / cliente
+  const [messagesByNamespace, setMessagesByNamespace] = useState<Record<string, Message[]>>({});
+
+  const messages = messagesByNamespace[namespace] || [getWelcomeMessage(namespace)];
+
+  const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setMessagesByNamespace((prev) => {
+      const current = prev[namespace] || [getWelcomeMessage(namespace)];
+      const nextMessages = typeof updater === "function" ? updater(current) : updater;
+      return {
+        ...prev,
+        [namespace]: nextMessages,
+      };
+    });
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingNamespaces, setIsLoadingNamespaces] = useState(false);
 
@@ -178,60 +245,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isPollingStatus]);
 
-  const inferUrlFromNamespace = (nsName: string) => {
-    const clean = nsName.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
-    if (clean.includes("avafin")) return "https://www.avafin.mx";
-    if (clean.includes("personalbliss")) return "https://personalbliss.org";
-    return `https://www.${clean.replace(/_/g, "-")}.com`;
-  };
 
-  const getClientDisplayName = (ns: string): string => {
-    if (!ns) return "Personal Bliss";
-    const clean = ns.replace(/^cliente-/, "").replace(/^pb_/, "").replace(/_/g, " ").replace(/-/g, " ");
-    return clean
-      .split(" ")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-  };
-
-  const getClientDomain = (ns: string): string => {
-    if (!ns) return "personalbliss.org";
-    const clean = ns.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
-    if (clean.includes("avafin")) return "avafin.mx";
-    if (clean.includes("personalbliss")) return "personalbliss.org";
-    return `${clean.replace(/_/g, "-")}.com`;
-  };
-
-  const getClientInitials = (ns: string): string => {
-    const name = getClientDisplayName(ns);
-    const parts = name.split(" ");
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
-
-  const formatUrlDisplay = (url: string): string => {
-    try {
-      const u = new URL(url);
-      return `${u.hostname}${u.pathname}`;
-    } catch {
-      return url;
-    }
-  };
-
-  const extractTitleFromUrl = (url: string): string => {
-    try {
-      const u = new URL(url);
-      const slug = u.pathname.split("/").filter(Boolean).pop();
-      if (!slug) return u.hostname;
-      return slug
-        .replace(/[-_]/g, " ")
-        .split(" ")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
-    } catch {
-      return "Página Indexada";
-    }
-  };
 
   const handleDeleteNamespace = async (nsToDelete: string) => {
     if (!confirm(`¿Estás seguro de borrar todos los vectores del sitio '${nsToDelete}' de Pinecone?`)) return;
