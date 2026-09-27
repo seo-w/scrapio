@@ -1,108 +1,163 @@
 # 🚀 Scrapio - Sistema RAG Multi-Tenant (Serverless)
 
-Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y Multi-Tenant**, construida para extraer contenido web mediante un crawler multi-página automatizado, vectorizar la información por cliente de manera aislada (Pinecone Namespaces) y consultar dicha información a través de una API con streaming y una interfaz web.
+Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y Multi-Tenant**, diseñada para extraer contenido web mediante un crawler multi-página automatizado, vectorizar la información por cliente de manera aislada (**Pinecone Namespaces**) y disponibilizar las consultas mediante una API con streaming y una interfaz web moderna.
 
 ---
 
 ## 📌 Guía de Replicación en Otras Cuentas / Entornos
 
-Esta sección detalla paso a paso cómo replicar completamente este proyecto desde cero en una cuenta de GitHub, Pinecone, Vercel y Google AI Studio diferente.
+Esta guía permite replicar el proyecto completo en una nueva cuenta de GitHub, Pinecone, Google AI Studio y Vercel desde cero.
 
 ### 1. Requisitos Previos
 
-1. **Google AI Studio (Gemini API):**
+1. **Google AI Studio (Gemini API Key):**
    * Registra una cuenta en [Google AI Studio](https://aistudio.google.com).
-   * Genera una nueva API Key.
-   * *Modelo de Embeddings utilizado:* `text-embedding-004` (Dimensión: 768).
-   * *Modelo LLM utilizado:* `gemini-1.5-flash` / `gemini-2.0-flash`.
+   * Genera una API Key.
+   * *Modelo de Embeddings:* `gemini-embedding-001` (Dimensión: 768 mediante `outputDimensionality: 768`).
+   * *Modelo LLM para RAG:* `gemini-3.8-flash`.
 
 2. **Pinecone Vector DB:**
    * Registra una cuenta gratuita en [Pinecone Console](https://app.pinecone.io).
    * Genera una API Key.
-   * Crea un nuevo Índice con las siguientes especificaciones **estrictas**:
-     * **Name:** `scrapio` (o el nombre configurado en `PINECONE_INDEX_NAME`).
-     * **Dimensions:** `768` (imprescindible para los embeddings de Gemini).
+   * Crea un nuevo Índice Serverless con estas especificaciones:
+     * **Name:** `scrapio` (o el configurado en `PINECONE_INDEX_NAME`).
+     * **Dimensions:** `768` (imprescindible para la dimensión configurada en Gemini).
      * **Metric:** `Cosine`.
      * **Type:** `Serverless` (Cloud Provider: AWS, Region: us-east-1).
 
-3. **Repositorio de GitHub:**
-   * Clona este repositorio o sube el código a tu cuenta:
-     ```bash
-     git clone https://github.com/seo-w/scrapio.git
-     cd scrapio
-     ```
-
 ---
 
-## 🔑 2. Variables de Entorno
+## 🔑 2. Variables de Entorno (.env.local)
 
-Crea un archivo `.env.local` en la raíz del proyecto basándote en `.env.example`:
+Crea el archivo `.env.local` en la raíz del proyecto (basándote en `.env.example`):
 
-```bash
+```env
 # Google Gemini API Key
-GEMINI_API_KEY=AIzaSy...
+GEMINI_API_KEY=tu_gemini_api_key_aqui
 
-# Pinecone Configuration
-PINECONE_API_KEY=pcsk_...
+# Pinecone API Configuration
+PINECONE_API_KEY=tu_pinecone_api_key_aqui
 PINECONE_INDEX_NAME=scrapio
 
-# Configuración del Proveedor de IA (gemini | openai)
+# Proveedor de IA por defecto (gemini | openai)
 AI_PROVIDER=gemini
 
 # Secreto para la API Headless (/api/v1/query)
-SCRAPIO_API_KEY=sk_scrapio_secret_key
+SCRAPIO_API_KEY=tu_secret_token_personalizado
 ```
-
-### GitHub Secrets (Para ejecuciones automatizadas de Ingesta):
-En tu repositorio de GitHub, ve a **Settings > Secrets and variables > Actions** y agrega los siguientes secretos:
-* `GEMINI_API_KEY`
-* `PINECONE_API_KEY`
-* `PINECONE_INDEX_NAME`
 
 ---
 
-## 🛠️ 3. Instalación y Desarrollo Local
+## 🚀 3. Comandos de Desarrollo e Ingesta Local
 
 ```bash
 # 1. Instalar dependencias
 npm install
 
-# 2. Ejecutar el servidor de desarrollo
+# 2. Iniciar el servidor de desarrollo
 npm run dev
 
-# 3. Ejecutar una ingesta/scraping de prueba desde la terminal
-npx tsx scripts/ingest.ts --url https://avafin.mx --namespace cliente-avafin
+# 3. Probar la ingesta de un sitio web desde la terminal (ejemplo: avafin.mx)
+npx tsx scripts/ingest.ts --url https://avafin.mx --namespace cliente-avafin --maxPages 10
 ```
 
 ---
 
-## 🏗️ 4. Arquitectura del Proyecto
+## 📡 4. Documentación de APIs (Endpoints)
+
+### A. Endpoint RAG para Interfaz Web (`/api/chat`)
+* **Método:** `POST`
+* **Content-Type:** `application/json`
+* **Body:**
+  ```json
+  {
+    "query": "¿Cuáles son los requisitos para un préstamo?",
+    "namespace": "cliente-avafin"
+  }
+  ```
+* **Respuesta Exitosa:**
+  ```json
+  {
+    "answer": "Para solicitar un préstamo se requiere...",
+    "sources": [
+      "https://avafin.mx/",
+      "https://avafin.mx/sucursales-puebla"
+    ],
+    "matchesCount": 4
+  }
+  ```
+
+### B. Endpoint Headless para Agentes / Terminal (`/api/v1/query`)
+* **Método:** `POST`
+* **Headers:** `Authorization: Bearer <SCRAPIO_API_KEY>`
+* **Body:**
+  ```json
+  {
+    "query": "¿Qué servicios ofrecen en sucursal?",
+    "namespace": "cliente-avafin"
+  }
+  ```
+* **Ejemplo cURL:**
+  ```bash
+  curl -X POST http://localhost:3000/api/v1/query \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer sk_scrapio_default_secret_key_2026" \
+    -d '{"query": "¿Qué servicios ofrecen?", "namespace": "cliente-avafin"}'
+  ```
+
+---
+
+## 🤖 5. Ingesta Automatizada en GitHub Actions
+
+El proyecto incluye un workflow en `.github/workflows/ingesta.yml` que permite ejecutar el scraping e ingesta directamente desde la pestaña **Actions** de GitHub sin necesidad de terminal.
+
+### Configuración de Secretos en GitHub:
+En tu repositorio de GitHub, ve a **Settings > Secrets and variables > Actions** e ingresa:
+1. `GEMINI_API_KEY`
+2. `PINECONE_API_KEY`
+3. `PINECONE_INDEX_NAME`
+
+### Cómo Ejecutar:
+1. Ve a la pestaña **Actions** en GitHub.
+2. Selecciona el workflow **Ingesta & Crawler Scrapio RAG**.
+3. Haz clic en **Run workflow** e ingresa los parámetros:
+   * `target_url`: `https://unsitio.com`
+   * `client_namespace`: `cliente-unsitio`
+   * `max_pages`: `15`
+
+---
+
+## 🌐 6. Despliegue en Vercel
+
+1. Sube tu repositorio a GitHub.
+2. Conecta el repositorio en [Vercel Console](https://vercel.com).
+3. En la sección **Environment Variables** de Vercel, agrega:
+   * `GEMINI_API_KEY`
+   * `PINECONE_API_KEY`
+   * `PINECONE_INDEX_NAME`
+   * `SCRAPIO_API_KEY`
+4. Haz clic en **Deploy**. ¡Tu plataforma RAG Multi-Tenant estará en producción!
+
+---
+
+## 🏗️ Estructura del Código
 
 ```
 scrapio/
-├── .github/
-│   └── workflows/
-│       └── ingesta.yml         # Workflow de ingesta multi-página automatizado
+├── .github/workflows/ingesta.yml   # Workflow de GitHub Actions para scraping
 ├── app/
 │   ├── api/
-│   │   ├── chat/route.ts      # Endpoint streaming para RAG (Web UI)
-│   │   └── v1/query/route.ts  # Endpoint headless (JSON con Auth Bearer)
-│   ├── page.tsx               # Interfaz Web de Chat y selección de Namespace
-│   └── layout.tsx             # Layout global Next.js
+│   │   ├── chat/route.ts        # Endpoint para Chat Web
+│   │   └── v1/query/route.ts    # Endpoint Headless (JSON + Auth)
+│   ├── globals.css              # Estilos globales con Tailwind CSS
+│   ├── layout.tsx               # Layout principal
+│   └── page.tsx                 # Interfaz de Chat con selección de Namespace
 ├── lib/
-│   ├── ai.ts                  # Adaptador modular para Gemini (y OpenAI)
-│   ├── pinecone.ts            # Cliente y operaciones Pinecone Namespaces
-│   └── crawler.ts             # Crawler multi-página con Cheerio y Turndown
+│   ├── ai.ts                    # Adaptador de Gemini (embeddings y LLM)
+│   ├── pinecone.ts              # Operaciones aisladas por Namespace en Pinecone
+│   └── crawler.ts               # Crawler multi-página con Cheerio y Turndown
 ├── scripts/
-│   └── ingest.ts              # Script ejecutable de ingesta/vectorización
-├── .env.example               # Plantilla de variables de entorno
-└── README.md                  # Documentación de replicación y uso
+│   └── ingest.ts                # CLI ejecutable de scraping e ingesta
+├── .env.example                 # Plantilla de variables de entorno
+└── README.md                    # Documentación técnica de replicación
 ```
-
----
-
-## 🔒 5. Estrategia de Aislamiento Multi-Tenant
-
-Para garantizar costo cero en la capa gratuita de Pinecone (que permite 1 solo índice), utilizamos **Pinecone Namespaces**:
-* Cada cliente o sitio web scrapeado se almacena bajo un `namespace` único (ejemplo: `cliente-avafin`).
-* Al realizar una consulta, la búsqueda por similitud vectorial queda estrictamente acotada a dicho `namespace`, impidiendo que los datos de distintos clientes se crucen.
