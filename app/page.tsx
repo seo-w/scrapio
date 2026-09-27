@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck } from "lucide-react";
+import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, X, Loader2, CheckCircle2 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -17,10 +17,18 @@ export default function Home() {
     {
       id: "1",
       role: "assistant",
-      content: "¡Hola, Wilman! Soy Scrapio RAG. Selecciona o ingresa el namespace de tu cliente para consultar su documentación procesada.",
+      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar o ingresar el namespace del cliente para realizar consultas, o presionar 'Escanear Nuevo Sitio' para enviar la orden de escaneo a GitHub Actions.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Estado para el modal de Ingesta / Escaneo
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [scanUrl, setScanUrl] = useState("");
+  const [scanNamespace, setScanNamespace] = useState("");
+  const [scanMaxPages, setScanMaxPages] = useState("50");
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +82,49 @@ export default function Home() {
     }
   };
 
+  const handleStartScan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanUrl.trim() || !scanNamespace.trim() || isScanning) return;
+
+    setIsScanning(true);
+    setScanStatus(null);
+
+    try {
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUrl: scanUrl.trim(),
+          clientNamespace: scanNamespace.trim(),
+          maxPages: parseInt(scanMaxPages, 10) || 50,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Error al enviar la orden de escaneo.");
+      }
+
+      setScanStatus({
+        type: "success",
+        message: data.message,
+      });
+
+      // Cambiar automáticamente el namespace activo al del nuevo cliente
+      setNamespace(scanNamespace.trim());
+      setScanUrl("");
+      setScanNamespace("");
+    } catch (err: any) {
+      setScanStatus({
+        type: "error",
+        message: err.message || "Error al conectar con la API de Ingesta.",
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen max-w-6xl mx-auto w-full p-4 md:p-6 gap-4">
       {/* Header */}
@@ -90,19 +141,29 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Namespace Control */}
-        <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-          <div className="flex items-center gap-1.5 px-3 text-xs text-slate-400 font-medium">
-            <Database className="w-4 h-4 text-indigo-400" />
-            <span>Namespace:</span>
+        {/* Controls: Botón Escanear Sitio + Selector de Namespace */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2 rounded-xl font-medium transition-all shadow-md shadow-indigo-600/20"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Escanear Nuevo Sitio</span>
+          </button>
+
+          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
+              <Database className="w-4 h-4 text-indigo-400" />
+              <span>Namespace:</span>
+            </div>
+            <input
+              type="text"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              placeholder="ej. cliente-avafin"
+              className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-indigo-500 font-mono w-40"
+            />
           </div>
-          <input
-            type="text"
-            value={namespace}
-            onChange={(e) => setNamespace(e.target.value)}
-            placeholder="ej. cliente-avafin"
-            className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-indigo-500 font-mono w-44"
-          />
         </div>
       </header>
 
@@ -196,6 +257,118 @@ export default function Home() {
           </button>
         </form>
       </main>
+
+      {/* Modal para Disparar Escaneo de Nuevo Sitio hacia GitHub Actions */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Escanear Nuevo Sitio Web</h3>
+                <p className="text-xs text-slate-400">Envia la orden a GitHub Actions para escanear e ingestar en Pinecone</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleStartScan} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  URL Base a Escanear
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={scanUrl}
+                  onChange={(e) => setScanUrl(e.target.value)}
+                  placeholder="https://ejemplo.com"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Namespace del Cliente (Aislamiento Multi-Tenant)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scanNamespace}
+                  onChange={(e) => setScanNamespace(e.target.value)}
+                  placeholder="ej. cliente-libranza"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Máximo de Páginas a Rastreadas
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={scanMaxPages}
+                  onChange={(e) => setScanMaxPages(e.target.value)}
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              {scanStatus && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                    scanStatus.type === "success"
+                      ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                      : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
+                  }`}
+                >
+                  {scanStatus.type === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <X className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  )}
+                  <span>{scanStatus.message}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isScanning}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
+                >
+                  {isScanning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enviando Orden...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Iniciar Escaneo en GitHub</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
