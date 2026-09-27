@@ -1,11 +1,15 @@
 @import "tailwindcss";
 
 @layer base {
+  html, body {
+    font-size: 16px;
+  }
+
   body {
     background-color: #CCD6E0;
     color: #0F172A;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    @apply antialiased font-sans select-none;
+    @apply antialiased font-sans select-none text-base;
   }
 
   /* Subtle custom scrollbar from code.html */
