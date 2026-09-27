@@ -22,15 +22,11 @@ const turndownService = new TurndownService({
   codeBlockStyle: "fenced",
 });
 
-// Remover elementos irrelevantes de Turndown mediante función de filtro
 turndownService.remove((node) => {
   const name = node.nodeName.toLowerCase();
   return ["script", "style", "nav", "footer", "header", "noscript", "iframe", "svg"].includes(name);
 });
 
-/**
- * Normaliza una URL resolviendo relativas y eliminando fragmentos (#)
- */
 function normalizeUrl(rawUrl: string, baseUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl, baseUrl);
@@ -44,9 +40,6 @@ function normalizeUrl(rawUrl: string, baseUrl: string): string | null {
   }
 }
 
-/**
- * Comprueba si una URL pertenece al mismo dominio/host que la URL base
- */
 function isSameDomain(targetUrl: string, baseUrl: string): boolean {
   try {
     const targetHost = new URL(targetUrl).hostname.replace(/^www\./, "");
@@ -58,11 +51,12 @@ function isSameDomain(targetUrl: string, baseUrl: string): boolean {
 }
 
 /**
- * Extrae URLs desde un archivo sitemap.xml o sitemap_index.xml
+ * Extrae URLs reales de páginas web resolviendo sitemaps recursivos (Sitemap Index)
  */
-export async function fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
+export async function fetchSitemapUrls(sitemapUrl: string, depth: number = 0): Promise<string[]> {
+  if (depth > 2) return []; // Evitar bucles infinitos en sitemaps
   try {
-    console.log(`🗺️ Buscando URLs en el sitemap: ${sitemapUrl}`);
+    console.log(`🗺️ Leyendo sitemap (nivel ${depth}): ${sitemapUrl}`);
     const res = await fetch(sitemapUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 ScrapioBot/1.0",
@@ -74,12 +68,23 @@ export async function fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
     const $ = cheerio.load(xmlText, { xmlMode: true });
     const urls: string[] = [];
 
+    const locs: string[] = [];
     $("url > loc, sitemap > loc").each((_, el) => {
       const loc = $(el).text().trim();
-      if (loc) urls.push(loc);
+      if (loc) locs.push(loc);
     });
 
-    return urls;
+    for (const loc of locs) {
+      if (loc.endsWith(".xml") || loc.includes("sitemap")) {
+        // Es un sub-sitemap (Sitemap Index), resolver de forma recursiva
+        const subUrls = await fetchSitemapUrls(loc, depth + 1);
+        urls.push(...subUrls);
+      } else {
+        urls.push(loc);
+      }
+    }
+
+    return Array.from(new Set(urls));
   } catch (err: any) {
     console.warn(`⚠️ No se pudo procesar sitemap ${sitemapUrl}:`, err.message);
     return [];
@@ -113,7 +118,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     chunkOverlap,
   });
 
-  // Intentar obtener URLs desde el sitemap.xml si está habilitado
+  // Intentar obtener URLs reales desde el sitemap.xml
   if (useSitemap) {
     const origin = new URL(normalizedStart).origin;
     const possibleSitemaps = [
@@ -124,10 +129,10 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     for (const sitemapUrl of possibleSitemaps) {
       const sitemapUrls = await fetchSitemapUrls(sitemapUrl);
       if (sitemapUrls.length > 0) {
-        console.log(`✅ ¡Sitemap encontrado con ${sitemapUrls.length} URLs! Agregando a la cola de rastreo.`);
+        console.log(`✅ ¡Sitemap completo resuelto! Se encontraron ${sitemapUrls.length} URLs de páginas web.`);
         for (const u of sitemapUrls) {
           const norm = normalizeUrl(u, normalizedStart);
-          if (norm && isSameDomain(norm, normalizedStart)) {
+          if (norm && isSameDomain(norm, normalizedStart) && !norm.endsWith(".xml")) {
             queue.push({ url: norm, depth: 1 });
           }
         }
@@ -144,7 +149,8 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
 
     const { url, depth } = item;
 
-    if (visitedUrls.has(url)) continue;
+    // Ignorar si ya fue visitada o si es un archivo .xml
+    if (visitedUrls.has(url) || url.endsWith(".xml")) continue;
     visitedUrls.add(url);
 
     try {
@@ -170,17 +176,13 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
       const html = await response.text();
       const $ = cheerio.load(html);
 
-      // Extraer H1 o título principal
       const h1Text = $("h1").first().text().trim() || $("title").text().trim() || "Sin Título";
 
-      // Eliminar elementos no deseados antes de extraer contenido
       $("nav, footer, header, script, style, noscript, svg, iframe, form").remove();
 
-      // Seleccionar el contenedor principal o el body
       const mainContainer = $("main, article, .content, #content, body").first();
       const htmlContent = mainContainer.html() || "";
 
-      // Convertir a Markdown limpio
       const markdown = turndownService.turndown(htmlContent).trim();
 
       if (markdown.length > 50) {
@@ -201,7 +203,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
 
           const resolved = normalizeUrl(href, url);
           if (resolved && isSameDomain(resolved, normalizedStart) && !visitedUrls.has(resolved)) {
-            if (!/\.(pdf|png|jpg|jpeg|gif|css|js|zip|svg|ico)$/i.test(resolved)) {
+            if (!/\.(pdf|png|jpg|jpeg|gif|css|js|zip|svg|ico|xml)$/i.test(resolved)) {
               queue.push({ url: resolved, depth: depth + 1 });
             }
           }
