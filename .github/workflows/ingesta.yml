@@ -27,16 +27,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Instalar Dependencias
-        run: npm ci
+        run: npm install
 
       - name: Ejecutar Crawler e Ingesta a Pinecone
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME || 'scrapio' }}
-          TARGET_URL: ${{ github.event.inputs.target_url }}
-          CLIENT_NAMESPACE: ${{ github.event.inputs.client_namespace }}
-        run: npx tsx scripts/ingest.ts --maxPages ${{ github.event.inputs.max_pages }}
+        run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }}

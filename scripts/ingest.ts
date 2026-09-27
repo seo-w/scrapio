@@ -8,19 +8,15 @@ import crypto from "crypto";
 
 async function main() {
   const args = process.argv.slice(2);
-  let targetUrl = "https://avafin.mx";
-  let namespace = "cliente-avafin";
-  let maxPages = 10;
+  let targetUrl = process.env.TARGET_URL || "https://avafin.mx";
+  let namespace = process.env.CLIENT_NAMESPACE || "cliente-avafin";
+  let maxPages = 20;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--url" && args[i + 1]) targetUrl = args[i + 1];
     if (args[i] === "--namespace" && args[i + 1]) namespace = args[i + 1];
     if (args[i] === "--maxPages" && args[i + 1]) maxPages = parseInt(args[i + 1], 10);
   }
-
-  // Permitir lectura de env vars (ej. GitHub Actions workflow dispatch)
-  if (process.env.TARGET_URL) targetUrl = process.env.TARGET_URL;
-  if (process.env.CLIENT_NAMESPACE) namespace = process.env.CLIENT_NAMESPACE;
 
   console.log("==========================================");
   console.log("🚀 SCRAPIO INGESTION PIPELINE");
@@ -33,7 +29,7 @@ async function main() {
   const chunks = await crawlDomain({
     startUrl: targetUrl,
     maxPages,
-    maxDepth: 2,
+    maxDepth: 3,
     chunkSize: 1000,
     chunkOverlap: 150,
   });
