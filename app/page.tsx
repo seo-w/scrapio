@@ -47,7 +47,6 @@ export default function Home() {
       if (res.ok && Array.isArray(data.namespaces)) {
         setAvailableNamespaces(data.namespaces);
         if (data.namespaces.length > 0 && (!namespace || namespace === "cliente-avafin")) {
-          // Seleccionar por defecto el primer namespace disponible si existe
           setNamespace(data.namespaces[0].name);
         }
       }
@@ -145,12 +144,11 @@ export default function Home() {
 
       setNamespace(scanNamespace.trim());
       setIsManualInput(false);
+
+      // Refrescar la lista de sitios escaneados después de unos segundos
       setTimeout(() => {
         fetchNamespaces();
-      }, 4000);
-
-      setScanUrl("");
-      setScanNamespace("");
+      }, 5000);
     } catch (err: any) {
       setScanStatus({
         type: "error",
@@ -390,10 +388,11 @@ export default function Home() {
                 <input
                   type="url"
                   required
+                  disabled={scanStatus?.type === "success"}
                   value={scanUrl}
                   onChange={(e) => setScanUrl(e.target.value)}
                   placeholder="https://ejemplo.com"
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
                 />
               </div>
 
@@ -404,10 +403,11 @@ export default function Home() {
                 <input
                   type="text"
                   required
+                  disabled={scanStatus?.type === "success"}
                   value={scanNamespace}
                   onChange={(e) => setScanNamespace(e.target.value)}
                   placeholder="ej. cliente-libranza"
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
                 />
               </div>
 
@@ -419,54 +419,69 @@ export default function Home() {
                   type="number"
                   min="1"
                   max="500"
+                  disabled={scanStatus?.type === "success"}
                   value={scanMaxPages}
                   onChange={(e) => setScanMaxPages(e.target.value)}
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
+                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
                 />
               </div>
 
               {scanStatus && (
                 <div
-                  className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                  className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 ${
                     scanStatus.type === "success"
                       ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
                       : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
                   }`}
                 >
                   {scanStatus.type === "success" ? (
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
                   ) : (
-                    <X className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <X className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-400" />
                   )}
-                  <span>{scanStatus.message}</span>
+                  <span className="leading-relaxed font-medium">{scanStatus.message}</span>
                 </div>
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isScanning}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
-                >
-                  {isScanning ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Enviando Orden...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Iniciar / Actualizar Escaneo</span>
-                    </>
-                  )}
-                </button>
+                {scanStatus?.type === "success" ? (
+                  /* Cuando la orden fue exitosa, desaparece el botón de enviar y se muestra un botón limpio de Entendido */
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Entendido / Cerrar</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isScanning}
+                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
+                    >
+                      {isScanning ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Enviando Orden...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Iniciar / Actualizar Escaneo</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>
