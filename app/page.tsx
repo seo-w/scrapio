@@ -15,6 +15,16 @@ interface NamespaceInfo {
   vectorCount: number;
 }
 
+interface IngestStatus {
+  isAvailable: boolean;
+  status: "queued" | "in_progress" | "completed" | "idle" | "unknown";
+  conclusion?: "success" | "failure" | null;
+  progressPercent: number;
+  currentStepName: string;
+  htmlUrl?: string;
+  updatedAt?: string;
+}
+
 export default function Home() {
   const [namespace, setNamespace] = useState("cliente-avafin");
   const [aiProvider, setAiProvider] = useState("gemini");
@@ -35,13 +45,15 @@ export default function Home() {
   const [systemIssues, setSystemIssues] = useState<string[]>([]);
   const [activeAlert, setActiveAlert] = useState<{ type: "error" | "warning" | "info"; title: string; message: string } | null>(null);
 
-  // Estado para el modal de Ingesta / Escaneo
+  // Estado para el modal y la barra de progreso de Ingesta / Escaneo
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [scanUrl, setScanUrl] = useState("");
   const [scanNamespace, setScanNamespace] = useState("");
   const [scanMaxPages, setScanMaxPages] = useState("100");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
+  const [isPollingStatus, setIsPollingStatus] = useState(false);
 
   const checkSystemHealth = async () => {
     try {
@@ -75,10 +87,39 @@ export default function Home() {
     }
   };
 
+  const checkIngestStatus = async () => {
+    try {
+      const res = await fetch("/api/ingest/status?t=" + Date.now());
+      if (res.ok) {
+        const data: IngestStatus = await res.json();
+        if (data.isAvailable) {
+          setIngestStatus(data);
+          if (data.status === "completed") {
+            setIsPollingStatus(false);
+            fetchNamespaces();
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error consultando estado de ingesta:", err);
+    }
+  };
+
   useEffect(() => {
     checkSystemHealth();
     fetchNamespaces();
+    checkIngestStatus();
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPollingStatus || ingestStatus?.status === "in_progress" || ingestStatus?.status === "queued") {
+      interval = setInterval(() => {
+        checkIngestStatus();
+      }, 4000);
+    }
+    return () => clearInterval(interval);
+  }, [isPollingStatus, ingestStatus?.status]);
 
   const inferUrlFromNamespace = (nsName: string) => {
     if (!nsName) return "";
@@ -213,6 +254,9 @@ export default function Home() {
         type: "success",
         message: data.message,
       });
+
+      setIsPollingStatus(true);
+      setTimeout(checkIngestStatus, 2500);
 
       setActiveAlert({
         type: "info",
@@ -390,6 +434,73 @@ export default function Home() {
             className="self-end md:self-center bg-amber-600/30 hover:bg-amber-600/40 text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg font-medium transition-all"
           >
             Re-comprobar
+          </button>
+        </div>
+      )}
+
+      {/* Barra de Progreso en Vivo para Escaneo e Ingesta en Segundo Plano */}
+      {ingestStatus && (ingestStatus.status === "in_progress" || ingestStatus.status === "queued" || isPollingStatus) && (
+        <div className="bg-slate-900/90 border border-indigo-500/40 rounded-2xl p-4 shadow-2xl backdrop-blur-md transition-all">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
+                <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>Procesando Escaneo e Ingesta</span>
+                  <span className="text-xs font-mono font-semibold text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 rounded-full">
+                    {ingestStatus.progressPercent}%
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-300 font-mono mt-0.5">
+                  {ingestStatus.currentStepName}
+                </p>
+              </div>
+            </div>
+            {ingestStatus.htmlUrl && (
+              <a
+                href={ingestStatus.htmlUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white bg-indigo-600/30 hover:bg-indigo-600/50 px-3 py-1.5 rounded-xl border border-indigo-500/30 font-medium transition-all"
+              >
+                <span>Ver GitHub Log</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+          <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+            <div
+              className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full transition-all duration-500 rounded-full"
+              style={{ width: `${Math.max(6, ingestStatus.progressPercent)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Notificación de Éxito al Finalizar Escaneo */}
+      {ingestStatus && ingestStatus.status === "completed" && ingestStatus.conclusion === "success" && (
+        <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 shadow-xl backdrop-blur-md flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">¡Escaneo e Ingesta Completada!</h4>
+              <p className="text-xs text-emerald-200 mt-0.5">
+                Los datos fueron vectorizados y cargados exitosamente en Pinecone. La lista de sitios se ha actualizado.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setIngestStatus(null);
+              fetchNamespaces();
+            }}
+            className="text-xs bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl font-semibold transition-all flex-shrink-0"
+          >
+            Cerrar Notificación
           </button>
         </div>
       )}
