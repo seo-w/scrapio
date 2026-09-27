@@ -9,30 +9,64 @@ function getGenAIClient() {
 }
 
 /**
- * Genera un vector embedding de 768 dimensiones usando gemini-embedding-001
+ * Genera un vector embedding de 768 dimensiones usando gemini-embedding-001 con reintentos automáticos
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, retries = 4): Promise<number[]> {
   const genAI = getGenAIClient();
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
   
-  const result = await model.embedContent({
-    content: { parts: [{ text }], role: "user" },
-    // @ts-ignore
-    outputDimensionality: 768,
-  });
-  
-  return result.embedding.values;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await model.embedContent({
+        content: { parts: [{ text }], role: "user" },
+        // @ts-ignore
+        outputDimensionality: 768,
+      });
+      return result.embedding.values;
+    } catch (err: any) {
+      const isRateLimit =
+        err.status === 429 ||
+        err.message?.includes("429") ||
+        err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("Quota");
+
+      if (attempt === retries || !isRateLimit) {
+        throw err;
+      }
+
+      // Backoff exponencial para el rate limit (2s, 4s, 8s...)
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      console.warn(`⏳ Rate Limit de Gemini alcanzado. Reintentando (${attempt}/${retries}) en ${backoffMs / 1000}s...`);
+      await new Promise((res) => setTimeout(res, backoffMs));
+    }
+  }
+
+  throw new Error("Error al generar embedding tras reintentos.");
 }
 
 /**
- * Genera vectores embedding por lotes
+ * Genera vectores embedding por lotes con retraso controlado para no exceder cuotas de la API de Gemini
  */
-export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+export async function generateEmbeddingsBatch(
+  texts: string[],
+  batchSize = 5,
+  delayMs = 200
+): Promise<number[][]> {
   const embeddings: number[][] = [];
-  for (const text of texts) {
-    const vector = await generateEmbedding(text);
-    embeddings.push(vector);
+  
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const batch = texts.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((t) => generateEmbedding(t))
+    );
+    embeddings.push(...batchResults);
+    
+    // Pequeño delay entre lotes para mantener el ritmo dentro de la cuota de la API
+    if (i + batchSize < texts.length) {
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
   }
+  
   return embeddings;
 }
 
