@@ -14,6 +14,7 @@ export interface CrawlOptions {
   maxDepth?: number;
   chunkSize?: number;
   chunkOverlap?: number;
+  useSitemap?: boolean;
 }
 
 const turndownService = new TurndownService({
@@ -57,15 +58,45 @@ function isSameDomain(targetUrl: string, baseUrl: string): boolean {
 }
 
 /**
+ * Extrae URLs desde un archivo sitemap.xml o sitemap_index.xml
+ */
+export async function fetchSitemapUrls(sitemapUrl: string): Promise<string[]> {
+  try {
+    console.log(`🗺️ Buscando URLs en el sitemap: ${sitemapUrl}`);
+    const res = await fetch(sitemapUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 ScrapioBot/1.0",
+      },
+    });
+    if (!res.ok) return [];
+
+    const xmlText = await res.text();
+    const $ = cheerio.load(xmlText, { xmlMode: true });
+    const urls: string[] = [];
+
+    $("url > loc, sitemap > loc").each((_, el) => {
+      const loc = $(el).text().trim();
+      if (loc) urls.push(loc);
+    });
+
+    return urls;
+  } catch (err: any) {
+    console.warn(`⚠️ No se pudo procesar sitemap ${sitemapUrl}:`, err.message);
+    return [];
+  }
+}
+
+/**
  * Rastrea recursivamente un dominio y devuelve los chunks procesados
  */
 export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
   const {
     startUrl,
-    maxPages = 15,
-    maxDepth = 2,
+    maxPages = 50,
+    maxDepth = 3,
     chunkSize = 1000,
     chunkOverlap = 150,
+    useSitemap = true,
   } = options;
 
   const normalizedStart = normalizeUrl(startUrl, startUrl);
@@ -82,7 +113,30 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     chunkOverlap,
   });
 
-  console.log(`🔍 Iniciando crawler en ${normalizedStart} (Límite: ${maxPages} páginas, Profundidad max: ${maxDepth})...`);
+  // Intentar obtener URLs desde el sitemap.xml si está habilitado
+  if (useSitemap) {
+    const origin = new URL(normalizedStart).origin;
+    const possibleSitemaps = [
+      `${origin}/sitemap.xml`,
+      `${origin}/sitemap_index.xml`,
+    ];
+
+    for (const sitemapUrl of possibleSitemaps) {
+      const sitemapUrls = await fetchSitemapUrls(sitemapUrl);
+      if (sitemapUrls.length > 0) {
+        console.log(`✅ ¡Sitemap encontrado con ${sitemapUrls.length} URLs! Agregando a la cola de rastreo.`);
+        for (const u of sitemapUrls) {
+          const norm = normalizeUrl(u, normalizedStart);
+          if (norm && isSameDomain(norm, normalizedStart)) {
+            queue.push({ url: norm, depth: 1 });
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  console.log(`🔍 Iniciando crawler en ${normalizedStart} (Límite: ${maxPages} páginas, Cola inicial: ${queue.length} URLs)...`);
 
   while (queue.length > 0 && visitedUrls.size < maxPages) {
     const item = queue.shift();
