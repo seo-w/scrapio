@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle, Trash2 } from "lucide-react";
+import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle, Trash2, Code2, Copy, Check } from "lucide-react";
 
 interface Message {
   id: string;
@@ -54,6 +54,17 @@ export default function Home() {
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
+
+  // Estado para el modal de Conectar con LLMs
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
+  const [activeDocTab, setActiveDocTab] = useState<"chatgpt" | "claude" | "python" | "n8n">("chatgpt");
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedSnippet(true);
+    setTimeout(() => setCopiedSnippet(false), 2000);
+  };
 
   const checkSystemHealth = async () => {
     try {
@@ -341,6 +352,16 @@ export default function Home() {
           >
             <RefreshCw className="w-4 h-4 text-amber-400" />
             <span>🔄 Actualizar Sitio</span>
+          </button>
+
+          {/* Botón 3: Conectar con tu LLM (ChatGPT, Claude, Cursor, Python) */}
+          <button
+            onClick={() => setIsDocsModalOpen(true)}
+            title="Cómo usar Scrapio con ChatGPT, Claude, Cursor, Python o Agentes IA"
+            className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all"
+          >
+            <Code2 className="w-4 h-4 text-emerald-400" />
+            <span>🔌 Conectar LLM</span>
           </button>
 
           {/* Desplegable de Sitios Escaneados */}
@@ -793,6 +814,200 @@ export default function Home() {
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal para Guiar la Conexión con LLMs Externos */}
+      {isDocsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setIsDocsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                <Code2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Conecta Scrapio con tu LLM Preferido</h3>
+                <p className="text-xs text-slate-400">Consulta los datos indexados de {namespace || "tus sitios"} desde cualquier IA o plataforma.</p>
+              </div>
+            </div>
+
+            {/* Selector de Pestañas */}
+            <div className="flex border-b border-slate-800 gap-1 mb-4 overflow-x-auto pb-1">
+              {[
+                { id: "chatgpt", label: "🤖 Custom GPTs (OpenAI)" },
+                { id: "claude", label: "💻 Claude & Cursor (MCP)" },
+                { id: "python", label: "🐍 Python & cURL" },
+                { id: "n8n", label: "⚡ n8n / Make" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveDocTab(tab.id as any)}
+                  className={`text-xs px-3 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                    activeDocTab === tab.id
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Contenido Dinámico por Pestaña */}
+            <div className="flex-1 overflow-y-auto pr-1 text-xs space-y-3 text-slate-300">
+              {activeDocTab === "chatgpt" && (
+                <div className="space-y-3">
+                  <p className="text-slate-200">
+                    Puedes conectar tu <strong>Custom GPT</strong> en ChatGPT para que consulte en tiempo real la información de tus sitios indexados:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
+                    <li>En ChatGPT, ve a <strong>Explore GPTs &gt; Create a GPT</strong> &gt; pestaña <strong>Configure</strong>.</li>
+                    <li>Desplázate a <strong>Actions</strong> y haz clic en <strong>Create new action</strong>.</li>
+                    <li>En el campo <em>Schema</em>, haz clic en <strong>Import from URL</strong> y pega:</li>
+                  </ol>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between font-mono text-indigo-300">
+                    <span>https://scrapio-one.vercel.app/api/openapi.json</span>
+                    <button
+                      onClick={() => copyToClipboard("https://scrapio-one.vercel.app/api/openapi.json")}
+                      className="p-1 hover:text-white text-slate-400 transition-colors"
+                      title="Copiar URL OpenAPI"
+                    >
+                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-slate-400">
+                    4. En <strong>Authentication</strong>, selecciona <strong>API Key</strong> (Bearer) e ingresa tu clave <code>SCRAPIO_API_KEY</code>.
+                  </p>
+                </div>
+              )}
+
+              {activeDocTab === "claude" && (
+                <div className="space-y-3">
+                  <p className="text-slate-200">
+                    Scrapio incluye un servidor <strong>Model Context Protocol (MCP)</strong> nativo para <strong>Claude Desktop</strong> y <strong>Cursor</strong>:
+                  </p>
+                  <p>Agrega esta configuración en tu archivo <code>claude_desktop_config.json</code>:</p>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          JSON.stringify(
+                            {
+                              mcpServers: {
+                                scrapio: {
+                                  command: "npx",
+                                  args: ["-y", "tsx", "scripts/mcp-server.ts"],
+                                  env: {
+                                    SCRAPIO_API_URL: "https://scrapio-one.vercel.app",
+                                    SCRAPIO_API_KEY: "tu_token_secreto",
+                                  },
+                                },
+                              },
+                            },
+                            null,
+                            2
+                          )
+                        )
+                      }
+                      className="absolute top-2.5 right-2.5 p-1 text-slate-400 hover:text-white"
+                      title="Copiar configuración MCP"
+                    >
+                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                    <pre>{`{
+  "mcpServers": {
+    "scrapio": {
+      "command": "npx",
+      "args": ["-y", "tsx", "scripts/mcp-server.ts"],
+      "env": {
+        "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",
+        "SCRAPIO_API_KEY": "tu_token_secreto"
+      }
+    }
+  }
+}`}</pre>
+                  </div>
+                </div>
+              )}
+
+              {activeDocTab === "python" && (
+                <div className="space-y-3">
+                  <p className="text-slate-200">
+                    Consulta el RAG de forma headless desde la terminal o scripts de Python apuntando al namespace <strong>{namespace || "cliente-avafin"}</strong>:
+                  </p>
+                  <p className="font-semibold text-slate-300">cURL (Terminal):</p>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          `curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer tu_secret_token" \\\n  -d '{"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}'`
+                        )
+                      }
+                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white"
+                    >
+                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                    <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer tu_secret_token" \\
+  -d '{"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}'`}</pre>
+                  </div>
+
+                  <p className="font-semibold text-slate-300">Python (requests):</p>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          `import requests\n\nres = requests.post(\n    "https://scrapio-one.vercel.app/api/v1/query",\n    headers={"Authorization": "Bearer tu_secret_token"},\n    json={"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}\n)\nprint(res.json()["answer"])`
+                        )
+                      }
+                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white"
+                    >
+                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                    <pre>{`import requests
+
+res = requests.post(
+    "https://scrapio-one.vercel.app/api/v1/query",
+    headers={"Authorization": "Bearer tu_secret_token"},
+    json={"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}
+)
+print(res.json()["answer"])`}</pre>
+                  </div>
+                </div>
+              )}
+
+              {activeDocTab === "n8n" && (
+                <div className="space-y-3">
+                  <p className="text-slate-200">
+                    Integra Scrapio en flujos automatizados de <strong>n8n</strong>, <strong>Make</strong> o <strong>Zapier</strong>:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1.5 text-slate-300">
+                    <li><strong>Nodo:</strong> HTTP Request</li>
+                    <li><strong>Método:</strong> POST</li>
+                    <li><strong>URL:</strong> <code>https://scrapio-one.vercel.app/api/v1/query</code></li>
+                    <li><strong>Authentication:</strong> Header Auth &gt; <code>Authorization: Bearer &lt;SCRAPIO_API_KEY&gt;</code></li>
+                    <li><strong>JSON Body:</strong> <code>{`{ "query": "{{ $json.mensajeUsuario }}", "namespace": "${namespace || "cliente-avafin"}" }`}</code></li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsDocsModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors"
+              >
+                Cerrar Guía
+              </button>
+            </div>
           </div>
         </div>
       )}
