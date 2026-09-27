@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     // 1. Vectorizar la consulta del usuario usando el proveedor seleccionado
     const queryVector = await generateEmbedding(query, aiProvider);
 
-    // 2. Recuperar el contexto relevante desde Pinecone acotado al namespace
-    const matches = await queryPinecone(namespace, queryVector, 4);
+    // 2. Recuperar el contexto relevante desde Pinecone acotado al namespace (8 chunks para mayor cobertura)
+    const matches = await queryPinecone(namespace, queryVector, 8);
 
     if (matches.length === 0) {
       return NextResponse.json({

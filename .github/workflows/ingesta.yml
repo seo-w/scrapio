@@ -42,4 +42,5 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME || 'scrapio' }}
           AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'gemini' }}
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }} --provider "${{ github.event.inputs.ai_provider }}"
