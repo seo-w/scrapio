@@ -22,6 +22,9 @@ import {
   FileText,
   Download,
   Search,
+  CheckCircle2,
+  Clock,
+  Globe,
 } from "lucide-react";
 
 interface Message {
@@ -149,6 +152,40 @@ export default function Home() {
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [isFragmentsModalOpen, setIsFragmentsModalOpen] = useState(false);
   const [activeFragments, setActiveFragments] = useState<{ title: string; url: string; score: number }[]>([]);
+
+  // Modal de Auditoría de URLs escaneadas vs faltantes
+  const [isUrlsAuditModalOpen, setIsUrlsAuditModalOpen] = useState(false);
+  const [urlsAuditData, setUrlsAuditData] = useState<{
+    namespace: string;
+    domain: string;
+    totalDiscovered: number;
+    totalIndexed: number;
+    totalPending: number;
+    progressPercent: number;
+    indexedUrls: string[];
+    pendingUrls: string[];
+  } | null>(null);
+  const [isLoadingUrlsAudit, setIsLoadingUrlsAudit] = useState(false);
+  const [urlsTab, setUrlsTab] = useState<"all" | "indexed" | "pending">("all");
+  const [urlsSearchFilter, setUrlsSearchFilter] = useState("");
+
+  const openUrlsAudit = async (targetNs?: string) => {
+    const ns = targetNs || namespace;
+    setIsUrlsAuditModalOpen(true);
+    setIsLoadingUrlsAudit(true);
+    setUrlsSearchFilter("");
+    try {
+      const res = await fetch(`/api/urls?namespace=${encodeURIComponent(ns)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setUrlsAuditData(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar auditoría de URLs:", err);
+    } finally {
+      setIsLoadingUrlsAudit(false);
+    }
+  };
 
   // Pestañas del Modal de Conexión LLM
   const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
@@ -531,9 +568,9 @@ export default function Home() {
               </span>
             </button>
 
-            {/* Rastreos */}
+            {/* Rastreos & Auditoría de URLs */}
             <button
-              onClick={openUpdateModal}
+              onClick={() => openUrlsAudit()}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -542,10 +579,10 @@ export default function Home() {
                     ingestStatus?.status === "in_progress" ? "text-amber-500 animate-spin" : "text-slate-500"
                   }`}
                 />
-                <span>Rastreos</span>
+                <span>Rastreos & URLs</span>
               </div>
               <span className="text-base font-medium text-slate-600">
-                {ingestStatus?.status === "in_progress" ? "1 activo" : "Inactivo"}
+                {ingestStatus?.status === "in_progress" ? "1 activo" : "Auditar"}
               </span>
             </button>
 
@@ -716,8 +753,16 @@ export default function Home() {
               <span className="font-mono text-slate-900 font-bold">{namespace}</span>
               <span className="text-slate-400">·</span>
               <span className="text-slate-600">
-                {Math.round(activeVectors / 15) || 120} páginas · {activeVectors.toLocaleString()} vectores · última actualización hace 2 h
+                {Math.round(activeVectors / 15) || 120} páginas · {activeVectors.toLocaleString()} vectores
               </span>
+              <span className="text-slate-400">·</span>
+              <button
+                onClick={() => openUrlsAudit()}
+                className="text-base font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1.5"
+                title="Ver lista de URLs indexadas vs las que faltan por rastrear"
+              >
+                <span>🔍 Ver URLs escaneadas vs faltantes</span>
+              </button>
             </div>
             <button
               onClick={() => setIsClientSelectorOpen(true)}
@@ -1367,6 +1412,206 @@ export default function Home() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Auditoría de URLs escaneadas vs faltantes */}
+      {isUrlsAuditModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[88vh] flex flex-col">
+            <button
+              onClick={() => setIsUrlsAuditModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold">
+                <Globe className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  Auditoría de URLs · {getClientDisplayName(urlsAuditData?.namespace || namespace)}
+                </h3>
+                <p className="text-base text-slate-500">
+                  URLs vectorizadas en Pinecone vs pendientes por rastrear en {urlsAuditData?.domain || "el dominio"}.
+                </p>
+              </div>
+            </div>
+
+            {isLoadingUrlsAudit ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <span className="text-base text-slate-600 font-medium">
+                  Consultando Pinecone y analizando sitemap...
+                </span>
+              </div>
+            ) : urlsAuditData ? (
+              <>
+                {/* Métricas y barra de progreso */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-3 space-y-2">
+                  <div className="flex items-center justify-between text-base">
+                    <span>
+                      Progreso del sitio: <strong>{urlsAuditData.progressPercent}%</strong>
+                    </span>
+                    <span className="text-slate-500">
+                      {urlsAuditData.totalIndexed} de {urlsAuditData.totalDiscovered} URLs indexadas
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${urlsAuditData.progressPercent}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-base">
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{urlsAuditData.totalIndexed} Escaneadas / Indexadas</span>
+                    </span>
+                    <span className="text-amber-700 font-semibold flex items-center gap-1.5">
+                      <Clock className="w-4 h-4" />
+                      <span>{urlsAuditData.totalPending} Pendientes en cola</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filtro y Búsqueda */}
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex gap-1 border-b border-slate-200 pb-1">
+                    {[
+                      { id: "all", label: `Todas (${urlsAuditData.totalDiscovered})` },
+                      { id: "indexed", label: `🟢 Indexadas (${urlsAuditData.totalIndexed})` },
+                      { id: "pending", label: `⏳ Faltantes (${urlsAuditData.totalPending})` },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setUrlsTab(tab.id as any)}
+                        className={`text-base px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                          urlsTab === tab.id
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={urlsSearchFilter}
+                      onChange={(e) => setUrlsSearchFilter(e.target.value)}
+                      placeholder="Filtrar URL..."
+                      className="pl-9 pr-3 py-1.5 text-base border border-slate-300 rounded-xl bg-slate-50 focus:bg-white outline-none w-48 focus:w-60 transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Lista scrolleable de URLs */}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[220px]">
+                  {(() => {
+                    const listToDisplay =
+                      urlsTab === "indexed"
+                        ? urlsAuditData.indexedUrls.map((u) => ({ url: u, isIndexed: true }))
+                        : urlsTab === "pending"
+                        ? urlsAuditData.pendingUrls.map((u) => ({ url: u, isIndexed: false }))
+                        : [
+                            ...urlsAuditData.indexedUrls.map((u) => ({ url: u, isIndexed: true })),
+                            ...urlsAuditData.pendingUrls.map((u) => ({ url: u, isIndexed: false })),
+                          ];
+
+                    const filtered = listToDisplay.filter((item) =>
+                      item.url.toLowerCase().includes(urlsSearchFilter.toLowerCase())
+                    );
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="py-8 text-center text-slate-500 text-base">
+                          No se encontraron URLs con el filtro actual.
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-base ${
+                          item.isIndexed
+                            ? "bg-emerald-50/40 border-emerald-200"
+                            : "bg-amber-50/40 border-amber-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          {item.isIndexed ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+                          )}
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-slate-800 hover:text-blue-600 hover:underline truncate"
+                          >
+                            {item.url}
+                          </a>
+                        </div>
+
+                        <span
+                          className={`px-2.5 py-0.5 rounded-md font-semibold text-xs shrink-0 ${
+                            item.isIndexed
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {item.isIndexed ? "Indexada" : "En cola"}
+                        </span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                {/* Acciones inferiores */}
+                <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
+                  {urlsAuditData.totalPending > 0 ? (
+                    <button
+                      onClick={() => {
+                        setIsUrlsAuditModalOpen(false);
+                        setScanNamespace(urlsAuditData.namespace);
+                        setScanUrl(urlsAuditData.domain);
+                        setScanMaxPages(String(urlsAuditData.totalPending + 10));
+                        setIsModalOpen(true);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base px-5 py-2.5 rounded-xl shadow-sm flex items-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Rastrear las {urlsAuditData.totalPending} URLs Faltantes</span>
+                    </button>
+                  ) : (
+                    <span className="text-emerald-700 font-semibold text-base flex items-center gap-1.5">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>100% de las URLs indexadas</span>
+                    </span>
+                  )}
+
+                  <button
+                    onClick={() => setIsUrlsAuditModalOpen(false)}
+                    className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-8 text-center text-slate-500 text-base">
+                No se pudo cargar la información de URLs.
+              </div>
+            )}
           </div>
         </div>
       )}
