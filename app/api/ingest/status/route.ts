@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const repoOwner = process.env.GITHUB_REPO_OWNER || "seo-w";
     const repoName = process.env.GITHUB_REPO_NAME || "scrapio";

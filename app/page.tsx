@@ -97,6 +97,8 @@ export default function Home() {
           if (data.status === "completed") {
             setIsPollingStatus(false);
             fetchNamespaces();
+          } else if (data.status === "in_progress" || data.status === "queued") {
+            setIsPollingStatus(true);
           }
         }
       }
@@ -112,14 +114,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isPollingStatus || ingestStatus?.status === "in_progress" || ingestStatus?.status === "queued") {
-      interval = setInterval(() => {
-        checkIngestStatus();
-      }, 4000);
-    }
+    if (!isPollingStatus) return;
+    const interval = setInterval(checkIngestStatus, 4000);
     return () => clearInterval(interval);
-  }, [isPollingStatus, ingestStatus?.status]);
+  }, [isPollingStatus]);
 
   const inferUrlFromNamespace = (nsName: string) => {
     if (!nsName) return "";

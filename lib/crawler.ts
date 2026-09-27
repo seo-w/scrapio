@@ -22,52 +22,47 @@ const turndownService = new TurndownService({
   codeBlockStyle: "fenced",
 });
 
-const USER_AGENT_POOL = [
+const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
 ];
 
-function getRandomHeaders() {
-  const ua = USER_AGENT_POOL[Math.floor(Math.random() * USER_AGENT_POOL.length)];
-  return {
-    "User-Agent": ua,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "cross-site",
-    "Upgrade-Insecure-Requests": "1",
-  };
-}
+const BASE_HEADERS = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+};
+
+const getHeaders = () => ({
+  ...BASE_HEADERS,
+  "User-Agent": USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
+});
+
+const toScraperUrl = (url: string) => {
+  const key = process.env.SCRAPER_API_KEY;
+  return key ? `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}` : url;
+};
 
 turndownService.remove((node) => {
   const name = node.nodeName.toLowerCase();
   return ["script", "style", "nav", "footer", "header", "noscript", "iframe", "svg"].includes(name);
 });
 
-function normalizeUrl(rawUrl: string, baseUrl: string): string | null {
+function normalizeUrl(raw: string, base: string): string | null {
   try {
-    const parsed = new URL(rawUrl, baseUrl);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return null;
-    }
-    parsed.hash = "";
-    return parsed.toString();
+    const p = new URL(raw, base);
+    return p.protocol.startsWith("http") ? `${p.origin}${p.pathname}${p.search}` : null;
   } catch {
     return null;
   }
 }
 
-function isSameDomain(targetUrl: string, baseUrl: string): boolean {
+function isSameDomain(a: string, b: string): boolean {
   try {
-    const targetHost = new URL(targetUrl).hostname.replace(/^www\./, "");
-    const baseHost = new URL(baseUrl).hostname.replace(/^www\./, "");
-    return targetHost === baseHost;
+    return new URL(a).hostname.replace(/^www\./, "") === new URL(b).hostname.replace(/^www\./, "");
   } catch {
     return false;
   }
@@ -80,13 +75,8 @@ export async function fetchSitemapUrls(sitemapUrl: string, depth: number = 0): P
   if (depth > 2) return []; // Evitar bucles infinitos en sitemaps
   try {
     console.log(`🗺️ Leyendo sitemap (nivel ${depth}): ${sitemapUrl}`);
-    const scraperApiKey = process.env.SCRAPER_API_KEY;
-    const fetchTargetUrl = scraperApiKey
-      ? `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(sitemapUrl)}`
-      : sitemapUrl;
-
-    const res = await fetch(fetchTargetUrl, {
-      headers: getRandomHeaders(),
+    const res = await fetch(toScraperUrl(sitemapUrl), {
+      headers: getHeaders(),
     });
     if (!res.ok) return [];
 
@@ -180,20 +170,8 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     visitedUrls.add(url);
 
     try {
-      const scraperApiKey = process.env.SCRAPER_API_KEY;
-      const fetchTargetUrl = scraperApiKey
-        ? `http://api.scraperapi.com?api_key=${scraperApiKey}&url=${encodeURIComponent(url)}`
-        : url;
-
-      if (scraperApiKey) {
-        console.log(`🌐 Scrapeando con ScraperAPI Proxy (${visitedUrls.size}/${maxPages}): ${url}`);
-      } else {
-        console.log(`🌐 Scrapeando (${visitedUrls.size}/${maxPages}) [Profundidad ${depth}]: ${url}`);
-      }
-      
-      const response = await fetch(fetchTargetUrl, {
-        headers: getRandomHeaders(),
-      });
+      console.log(`🌐 Scrapeando (${visitedUrls.size}/${maxPages}) [Profundidad ${depth}]: ${url}`);
+      const response = await fetch(toScraperUrl(url), { headers: getHeaders() });
 
       if (response.status === 429) {
         console.warn(`⏳ El sitio respondió con HTTP 429 (Límite de peticiones). Pausando 3.5 segundos antes de reintentar ${url}...`);

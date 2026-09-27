@@ -29,26 +29,17 @@ async function main() {
   console.log(`Proveedor IA Embeddings: ${provider.toUpperCase()}`);
   console.log("==========================================");
 
-  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
-    if (process.env.GEMINI_API_KEY) {
-      console.warn("⚠️ AVISO: Se solicitó OpenAI para la ingesta, pero falta la variable OPENAI_API_KEY en los secretos de GitHub.");
-      console.warn("🔄 Alternando automáticamente a Google Gemini para completar el procesamiento sin fallar el trabajo.");
-      provider = "gemini";
-    } else {
-      console.error("❌ ERROR CRÍTICO: No se encontró la variable OPENAI_API_KEY ni GEMINI_API_KEY en los secretos de GitHub.");
-      process.exit(1);
-    }
+  if (provider === "openai" && !process.env.OPENAI_API_KEY && process.env.GEMINI_API_KEY) {
+    console.warn("⚠️ Falta OPENAI_API_KEY en secretos de GitHub. Alternando a Gemini.");
+    provider = "gemini";
+  } else if (provider === "gemini" && !process.env.GEMINI_API_KEY && process.env.OPENAI_API_KEY) {
+    console.warn("⚠️ Falta GEMINI_API_KEY en secretos de GitHub. Alternando a OpenAI.");
+    provider = "openai";
   }
 
-  if (provider === "gemini" && !process.env.GEMINI_API_KEY) {
-    if (process.env.OPENAI_API_KEY) {
-      console.warn("⚠️ AVISO: Se solicitó Gemini para la ingesta, pero falta la variable GEMINI_API_KEY en los secretos de GitHub.");
-      console.warn("🔄 Alternando automáticamente a OpenAI para completar el procesamiento.");
-      provider = "openai";
-    } else {
-      console.error("❌ ERROR CRÍTICO: No se encontró la variable GEMINI_API_KEY ni OPENAI_API_KEY en los secretos de GitHub.");
-      process.exit(1);
-    }
+  if (!process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.error("❌ ERROR CRÍTICO: No se encontró GEMINI_API_KEY ni OPENAI_API_KEY.");
+    process.exit(1);
   }
 
   if (!process.env.PINECONE_API_KEY) {
