@@ -15,6 +15,10 @@ on:
         description: 'Límite máximo de páginas a rastrear'
         required: false
         default: '20'
+      ai_provider:
+        description: 'Proveedor de IA (gemini u openai)'
+        required: false
+        default: 'gemini'
 
 jobs:
   ingest:
@@ -34,6 +38,8 @@ jobs:
       - name: Ejecutar Crawler e Ingesta a Pinecone
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: ${{ secrets.PINECONE_INDEX_NAME || 'scrapio' }}
-        run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }}
+          AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'gemini' }}
+        run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }} --provider "${{ github.event.inputs.ai_provider }}"

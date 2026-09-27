@@ -12,10 +12,13 @@ async function main() {
   let namespace = process.env.CLIENT_NAMESPACE || "cliente-avafin";
   let maxPages = 20;
 
+  let provider = process.env.AI_PROVIDER || "gemini";
+
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--url" && args[i + 1]) targetUrl = args[i + 1];
     if (args[i] === "--namespace" && args[i + 1]) namespace = args[i + 1];
     if (args[i] === "--maxPages" && args[i + 1]) maxPages = parseInt(args[i + 1], 10);
+    if (args[i] === "--provider" && args[i + 1]) provider = args[i + 1];
   }
 
   console.log("==========================================");
@@ -23,9 +26,15 @@ async function main() {
   console.log(`URL Base: ${targetUrl}`);
   console.log(`Namespace: ${namespace}`);
   console.log(`Máximo de Páginas: ${maxPages}`);
+  console.log(`Proveedor IA Embeddings: ${provider.toUpperCase()}`);
   console.log("==========================================");
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+    console.error("❌ ERROR CRÍTICO: No se encontró la variable OPENAI_API_KEY en los secretos del repositorio de GitHub.");
+    process.exit(1);
+  }
+
+  if (provider === "gemini" && !process.env.GEMINI_API_KEY) {
     console.error("❌ ERROR CRÍTICO: No se encontró la variable GEMINI_API_KEY en los secretos del repositorio de GitHub.");
     process.exit(1);
   }
@@ -50,10 +59,10 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings (${chunks.length} chunks)...`);
+  console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings con ${provider.toUpperCase()} (${chunks.length} chunks)...`);
 
   const chunkTexts = chunks.map((c) => c.text);
-  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, undefined, 3, 350);
+  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, provider, 3, 350);
 
   const upsertItems: UpsertItem[] = [];
 

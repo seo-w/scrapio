@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { targetUrl, clientNamespace, maxPages = 50 } = body;
+    const { targetUrl, clientNamespace, maxPages = 50, aiProvider } = body;
 
     if (!targetUrl || typeof targetUrl !== "string") {
       return NextResponse.json(
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
           target_url: targetUrl,
           client_namespace: clientNamespace,
           max_pages: String(maxPages),
+          ai_provider: aiProvider || "gemini",
         },
       }),
     });
