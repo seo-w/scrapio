@@ -24,7 +24,7 @@ export default function Home() {
     {
       id: "1",
       role: "assistant",
-      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar un sitio web de la lista de escaneados, actualizar sus datos o presionar 'Nuevo Sitio' para agregar un nuevo cliente.",
+      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar un sitio web de la lista de escaneados, presionar '🔄 Actualizar' para re-escanearlo, o presionar '➕ Nuevo Sitio' para agregar un nuevo cliente.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +42,7 @@ export default function Home() {
   const fetchNamespaces = async () => {
     setIsLoadingNamespaces(true);
     try {
-      const res = await fetch("/api/namespaces");
+      const res = await fetch("/api/namespaces?t=" + Date.now());
       const data = await res.json();
       if (res.ok && Array.isArray(data.namespaces)) {
         setAvailableNamespaces(data.namespaces);
@@ -161,7 +161,6 @@ export default function Home() {
   // Abrir modal preparado para re-escanear/actualizar el sitio actual con auto-relleno inteligente de URL
   const openUpdateModal = () => {
     setScanNamespace(namespace);
-    // Infección/Auto-relleno inteligente de la URL
     if (namespace.toLowerCase().includes("avafin")) {
       setScanUrl("https://www.avafin.mx");
     } else {
@@ -194,26 +193,28 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls Bar */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          {/* Botón 1: Nuevo Sitio */}
           <button
             onClick={openNewSiteModal}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2 rounded-xl font-medium transition-all shadow-md shadow-indigo-600/20"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-indigo-600/20"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Nuevo Sitio</span>
+            <span>➕ Nuevo Sitio</span>
           </button>
 
+          {/* Botón 2: Actualizar / Re-escanear Sitio Activo */}
           <button
             onClick={openUpdateModal}
-            title="Re-escanear o actualizar datos del sitio activo"
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs px-3 py-2 rounded-xl font-medium transition-all"
+            title="Re-escanear o actualizar datos del sitio seleccionado"
+            className="flex items-center gap-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Actualizar</span>
+            <RefreshCw className="w-4 h-4 text-amber-400" />
+            <span>🔄 Actualizar Sitio</span>
           </button>
 
-          {/* Selector de Sitio / Namespace con fallback interactivo */}
+          {/* Desplegable de Sitios Escaneados */}
           <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
             <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
               <Database className="w-4 h-4 text-indigo-400" />
