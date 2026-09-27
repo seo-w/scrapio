@@ -25,7 +25,6 @@ async function main() {
   console.log(`Máximo de Páginas: ${maxPages}`);
   console.log("==========================================");
 
-  // Validación preventiva de variables de entorno requeridas
   if (!process.env.GEMINI_API_KEY) {
     console.error("❌ ERROR CRÍTICO: No se encontró la variable GEMINI_API_KEY en los secretos del repositorio de GitHub.");
     process.exit(1);
@@ -54,11 +53,11 @@ async function main() {
   console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings (${chunks.length} chunks)...`);
 
   const chunkTexts = chunks.map((c) => c.text);
-  const vectors = await generateEmbeddingsBatch(chunkTexts, 5, 150);
+  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, 3, 350);
 
   const upsertItems: UpsertItem[] = [];
 
-  for (let i = 0; i < chunks.length; i++) {
+  for (let i = 0; i < processedCount; i++) {
     const chunk = chunks[i];
     const vector = vectors[i];
     
@@ -78,14 +77,21 @@ async function main() {
   }
 
   // 2. Cargar en Pinecone bajo el Namespace específico
-  console.log(`\n📤 Iniciando fase 3: Carga de ${upsertItems.length} vectores en Pinecone (namespace: '${namespace}')...`);
-  await upsertToPinecone(namespace, upsertItems);
+  if (upsertItems.length > 0) {
+    console.log(`\n📤 Iniciando fase 3: Carga de ${upsertItems.length} vectores en Pinecone (namespace: '${namespace}')...`);
+    await upsertToPinecone(namespace, upsertItems);
+  }
 
-  console.log(`\n🎉 INGESTA COMPLETADA CON ÉXITO!`);
-  console.log(`Los datos de '${targetUrl}' ahora están disponibles aislados en el namespace: '${namespace}' (${upsertItems.length} vectores cargados)`);
+  if (quotaExhausted) {
+    console.log(`\n⚠️ INGESTA PARCIAL COMPLETADA (LÍMITE DE CUOTA DE GEMINI ALCANZADO)`);
+    console.log(`Se guardaron exitosamente ${upsertItems.length} vectores procesados en Pinecone bajo el namespace '${namespace}'.`);
+  } else {
+    console.log(`\n🎉 INGESTA COMPLETADA CON ÉXITO!`);
+    console.log(`Los datos de '${targetUrl}' ahora están disponibles aislados en el namespace: '${namespace}' (${upsertItems.length} vectores cargados)`);
+  }
 }
 
 main().catch((err) => {
-  console.error("❌ Error no controlado en el proceso de ingesta:", err);
+  console.error("❌ Error en el proceso de ingesta:", err);
   process.exit(1);
 });

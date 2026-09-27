@@ -11,7 +11,7 @@ function getGenAIClient() {
 /**
  * Genera un vector embedding de 768 dimensiones usando gemini-embedding-001 con reintentos automáticos
  */
-export async function generateEmbedding(text: string, retries = 4): Promise<number[]> {
+export async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
   const genAI = getGenAIClient();
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
   
@@ -24,19 +24,19 @@ export async function generateEmbedding(text: string, retries = 4): Promise<numb
       });
       return result.embedding.values;
     } catch (err: any) {
-      const isRateLimit =
+      const isQuotaError =
         err.status === 429 ||
         err.message?.includes("429") ||
         err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("quota") ||
         err.message?.includes("Quota");
 
-      if (attempt === retries || !isRateLimit) {
+      if (attempt === retries || isQuotaError) {
         throw err;
       }
 
-      // Backoff exponencial para el rate limit (2s, 4s, 8s...)
-      const backoffMs = Math.pow(2, attempt) * 1000;
-      console.warn(`⏳ Rate Limit de Gemini alcanzado. Reintentando (${attempt}/${retries}) en ${backoffMs / 1000}s...`);
+      const backoffMs = Math.pow(2, attempt) * 1500;
+      console.warn(`⏳ Control de velocidad de Gemini. Reintentando (${attempt}/${retries}) en ${backoffMs / 1000}s...`);
       await new Promise((res) => setTimeout(res, backoffMs));
     }
   }
@@ -45,29 +45,48 @@ export async function generateEmbedding(text: string, retries = 4): Promise<numb
 }
 
 /**
- * Genera vectores embedding por lotes con retraso controlado para no exceder cuotas de la API de Gemini
+ * Genera vectores embedding por lotes con salvaguarda de cuotas de Gemini
  */
 export async function generateEmbeddingsBatch(
   texts: string[],
-  batchSize = 5,
-  delayMs = 200
-): Promise<number[][]> {
-  const embeddings: number[][] = [];
-  
+  batchSize = 3,
+  delayMs = 350
+): Promise<{ vectors: number[][]; processedCount: number; quotaExhausted: boolean }> {
+  const vectors: number[][] = [];
+  let quotaExhausted = false;
+
   for (let i = 0; i < texts.length; i += batchSize) {
+    if (quotaExhausted) break;
     const batch = texts.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
-      batch.map((t) => generateEmbedding(t))
-    );
-    embeddings.push(...batchResults);
     
-    // Pequeño delay entre lotes para mantener el ritmo dentro de la cuota de la API
+    try {
+      const batchResults = await Promise.all(
+        batch.map((t) => generateEmbedding(t))
+      );
+      vectors.push(...batchResults);
+    } catch (err: any) {
+      const isQuota =
+        err.status === 429 ||
+        err.message?.includes("429") ||
+        err.message?.includes("quota") ||
+        err.message?.includes("Quota") ||
+        err.message?.includes("RESOURCE_EXHAUSTED");
+
+      if (isQuota) {
+        console.warn(`\n⚠️ Se ha alcanzado el límite de cuota de la cuenta gratuita de Gemini API.`);
+        console.warn(`💾 Salvaguardando de forma segura los ${vectors.length} vectores procesados hasta el momento...`);
+        quotaExhausted = true;
+        break;
+      }
+      throw err;
+    }
+
     if (i + batchSize < texts.length) {
       await new Promise((res) => setTimeout(res, delayMs));
     }
   }
-  
-  return embeddings;
+
+  return { vectors, processedCount: vectors.length, quotaExhausted };
 }
 
 export interface ContextChunk {
