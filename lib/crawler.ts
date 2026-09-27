@@ -250,8 +250,9 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
         });
       }
 
-      // Pequeña pausa amigable (150ms) entre peticiones para evitar activar el rate limit del sitio
-      await new Promise((res) => setTimeout(res, 150));
+      // Pausa aleatoria con jitter (350ms - 750ms) para imitar velocidad humana e impredecible
+      const randomJitter = Math.floor(Math.random() * 400) + 350;
+      await new Promise((res) => setTimeout(res, randomJitter));
 
     } catch (err: any) {
       console.error(`❌ Error scrapeando ${url}:`, err.message || err);
