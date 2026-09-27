@@ -18,6 +18,7 @@ interface NamespaceInfo {
 export default function Home() {
   const [namespace, setNamespace] = useState("cliente-avafin");
   const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
+  const [isManualInput, setIsManualInput] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -37,20 +38,21 @@ export default function Home() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Cargar la lista de namespaces / sitios escaneados desde Pinecone al montar el componente
+  // Cargar la lista de namespaces / sitios escaneados desde Pinecone
   const fetchNamespaces = async () => {
     setIsLoadingNamespaces(true);
     try {
       const res = await fetch("/api/namespaces");
       const data = await res.json();
-      if (res.ok && data.namespaces) {
+      if (res.ok && Array.isArray(data.namespaces)) {
         setAvailableNamespaces(data.namespaces);
-        if (data.namespaces.length > 0 && !namespace) {
+        if (data.namespaces.length > 0 && (!namespace || namespace === "cliente-avafin")) {
+          // Seleccionar por defecto el primer namespace disponible si existe
           setNamespace(data.namespaces[0].name);
         }
       }
     } catch (err) {
-      console.error("Error cargando namespaces:", err);
+      console.error("Error cargando namespaces desde Pinecone:", err);
     } finally {
       setIsLoadingNamespaces(false);
     }
@@ -141,11 +143,11 @@ export default function Home() {
         message: data.message,
       });
 
-      // Cambiar automáticamente el namespace activo y refrescar la lista
       setNamespace(scanNamespace.trim());
+      setIsManualInput(false);
       setTimeout(() => {
         fetchNamespaces();
-      }, 3000);
+      }, 4000);
 
       setScanUrl("");
       setScanNamespace("");
@@ -159,7 +161,6 @@ export default function Home() {
     }
   };
 
-  // Abrir modal preparado para re-escanear/actualizar el sitio actual
   const openUpdateModal = () => {
     setScanNamespace(namespace);
     setScanUrl("");
@@ -167,7 +168,6 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  // Abrir modal preparado para un nuevo sitio
   const openNewSiteModal = () => {
     setScanNamespace("");
     setScanUrl("");
@@ -191,9 +191,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Control Bar: Botones y Desplegable */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {/* Botón para Escanear Nuevo Sitio */}
           <button
             onClick={openNewSiteModal}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2 rounded-xl font-medium transition-all shadow-md shadow-indigo-600/20"
@@ -202,7 +201,6 @@ export default function Home() {
             <span>Nuevo Sitio</span>
           </button>
 
-          {/* Botón para Re-escanear/Actualizar el seleccionado */}
           <button
             onClick={openUpdateModal}
             title="Re-escanear o actualizar datos del sitio activo"
@@ -212,38 +210,58 @@ export default function Home() {
             <span>Actualizar</span>
           </button>
 
-          {/* Desplegable de Sitios Escaneados (Pinecone Namespaces) */}
+          {/* Selector de Sitio / Namespace con fallback interactivo */}
           <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
             <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
               <Database className="w-4 h-4 text-indigo-400" />
               <span>Sitio:</span>
             </div>
-            
-            {availableNamespaces.length > 0 ? (
+
+            {!isManualInput ? (
               <select
                 value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === "__manual__") {
+                    setIsManualInput(true);
+                  } else {
+                    setNamespace(e.target.value);
+                  }
+                }}
                 className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-indigo-500 font-mono"
               >
-                {availableNamespaces.map((ns) => (
-                  <option key={ns.name} value={ns.name}>
-                    {ns.name} ({ns.vectorCount} vectores)
-                  </option>
-                ))}
+                {availableNamespaces.length > 0 ? (
+                  availableNamespaces.map((ns) => (
+                    <option key={ns.name} value={ns.name}>
+                      {ns.name} ({ns.vectorCount} vectores)
+                    </option>
+                  ))
+                ) : (
+                  <option value="cliente-avafin">cliente-avafin (27 vectores)</option>
+                )}
+                <option value="__manual__">✏️ Escribir otro namespace...</option>
               </select>
             ) : (
-              <input
-                type="text"
-                value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
-                placeholder="ej. cliente-avafin"
-                className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-indigo-500 font-mono w-36"
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  autoFocus
+                  value={namespace}
+                  onChange={(e) => setNamespace(e.target.value)}
+                  placeholder="ej. cliente-demo"
+                  className="bg-slate-900 text-xs text-white px-2.5 py-1 rounded-lg border border-indigo-500 font-mono w-32"
+                />
+                <button
+                  onClick={() => setIsManualInput(false)}
+                  className="text-xs text-slate-400 hover:text-white px-1.5"
+                >
+                  ✕
+                </button>
+              </div>
             )}
 
             <button
               onClick={fetchNamespaces}
-              title="Refrescar lista de sitios"
+              title="Refrescar lista de sitios desde Pinecone"
               className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNamespaces ? "animate-spin" : ""}`} />
