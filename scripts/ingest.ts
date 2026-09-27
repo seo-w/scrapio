@@ -25,7 +25,19 @@ async function main() {
   console.log(`Máximo de Páginas: ${maxPages}`);
   console.log("==========================================");
 
+  // Validación preventiva de variables de entorno requeridas
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("❌ ERROR CRÍTICO: No se encontró la variable GEMINI_API_KEY en los secretos del repositorio de GitHub.");
+    process.exit(1);
+  }
+
+  if (!process.env.PINECONE_API_KEY) {
+    console.error("❌ ERROR CRÍTICO: No se encontró la variable PINECONE_API_KEY en los secretos del repositorio de GitHub.");
+    process.exit(1);
+  }
+
   // 1. Rastreo y Extracción
+  console.log(`🌐 Iniciando fase 1: Rastreo de dominio...`);
   const chunks = await crawlDomain({
     startUrl: targetUrl,
     maxPages,
@@ -35,13 +47,12 @@ async function main() {
   });
 
   if (chunks.length === 0) {
-    console.error("❌ No se pudieron extraer chunks de contenido.");
+    console.error("❌ No se pudieron extraer chunks de contenido del sitio especificado.");
     process.exit(1);
   }
 
-  console.log(`\n🧠 Generando vectores embeddings (lotes seguros) para ${chunks.length} chunks...`);
+  console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings (${chunks.length} chunks)...`);
 
-  // Extraer el texto de los chunks para procesamiento por lotes con reintentos automáticos
   const chunkTexts = chunks.map((c) => c.text);
   const vectors = await generateEmbeddingsBatch(chunkTexts, 5, 150);
 
@@ -51,7 +62,6 @@ async function main() {
     const chunk = chunks[i];
     const vector = vectors[i];
     
-    // Crear ID determinístico basado en URL + índice
     const idHash = crypto.createHash("md5").update(`${chunk.url}#${i}`).digest("hex");
     
     upsertItems.push({
@@ -68,7 +78,7 @@ async function main() {
   }
 
   // 2. Cargar en Pinecone bajo el Namespace específico
-  console.log(`\n📤 Subiendo ${upsertItems.length} vectores a Pinecone bajo el namespace '${namespace}'...`);
+  console.log(`\n📤 Iniciando fase 3: Carga de ${upsertItems.length} vectores en Pinecone (namespace: '${namespace}')...`);
   await upsertToPinecone(namespace, upsertItems);
 
   console.log(`\n🎉 INGESTA COMPLETADA CON ÉXITO!`);
@@ -76,6 +86,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("❌ Error en el proceso de ingesta:", err);
+  console.error("❌ Error no controlado en el proceso de ingesta:", err);
   process.exit(1);
 });
