@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info } from "lucide-react";
+import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle } from "lucide-react";
 
 interface Message {
   id: string;
@@ -31,6 +31,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingNamespaces, setIsLoadingNamespaces] = useState(false);
 
+  // Estado para alertas del sistema (/api/health)
+  const [systemIssues, setSystemIssues] = useState<string[]>([]);
+  const [activeAlert, setActiveAlert] = useState<{ type: "error" | "warning" | "info"; title: string; message: string } | null>(null);
+
   // Estado para el modal de Ingesta / Escaneo
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [scanUrl, setScanUrl] = useState("");
@@ -38,6 +42,21 @@ export default function Home() {
   const [scanMaxPages, setScanMaxPages] = useState("50");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Diagnóstico automático de salud del sistema al iniciar
+  const checkSystemHealth = async () => {
+    try {
+      const res = await fetch("/api/health");
+      const data = await res.json();
+      if (data.issues && data.issues.length > 0) {
+        setSystemIssues(data.issues);
+      } else {
+        setSystemIssues([]);
+      }
+    } catch (err) {
+      console.error("Error al consultar salud del sistema:", err);
+    }
+  };
 
   const fetchNamespaces = async () => {
     setIsLoadingNamespaces(true);
@@ -58,6 +77,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    checkSystemHealth();
     fetchNamespaces();
   }, []);
 
@@ -83,6 +103,7 @@ export default function Home() {
     setMessages((prev) => [...prev, userMessage]);
     setInputQuery("");
     setIsLoading(true);
+    setActiveAlert(null);
 
     try {
       const res = await fetch("/api/chat", {
@@ -98,6 +119,12 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Alerta visual inmediata si ocurre un error en la consulta
+        setActiveAlert({
+          type: "error",
+          title: "Error en la Consulta RAG",
+          message: data.error || "Ocurrió un problema al comunicarse con el proveedor de IA.",
+        });
         throw new Error(data.error || "Error al procesar la consulta.");
       }
 
@@ -129,6 +156,7 @@ export default function Home() {
 
     setIsScanning(true);
     setScanStatus(null);
+    setActiveAlert(null);
 
     try {
       const res = await fetch("/api/ingest", {
@@ -145,12 +173,27 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
+        setScanStatus({
+          type: "error",
+          message: data.error || "Error al enviar la orden de escaneo.",
+        });
+        setActiveAlert({
+          type: "error",
+          title: "Error al Iniciar Escaneo",
+          message: data.error || "Revisa las variables de entorno o cuotas configuradas.",
+        });
         throw new Error(data.error || "Error al enviar la orden de escaneo.");
       }
 
       setScanStatus({
         type: "success",
         message: data.message,
+      });
+
+      setActiveAlert({
+        type: "info",
+        title: "Escaneo Iniciado en Segundo Plano",
+        message: `El sitio '${scanUrl}' se está procesando bajo el namespace '${scanNamespace}'. Los datos aparecerán al actualizar.`,
       });
 
       setNamespace(scanNamespace.trim());
@@ -160,10 +203,7 @@ export default function Home() {
         fetchNamespaces();
       }, 5000);
     } catch (err: any) {
-      setScanStatus({
-        type: "error",
-        message: err.message || "Error al conectar con la API de Ingesta.",
-      });
+      console.error("Error en handleStartScan:", err);
     } finally {
       setIsScanning(false);
     }
@@ -296,6 +336,62 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Alerta Preventiva del Sistema si falta alguna Variable de Entorno */}
+      {systemIssues.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-300 flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-lg">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-200 mb-0.5">⚠️ Alerta de Configuración del Sistema detectada:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-300">
+                {systemIssues.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <button
+            onClick={checkSystemHealth}
+            className="self-end md:self-center bg-amber-600/30 hover:bg-amber-600/40 text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg font-medium transition-all"
+          >
+            Re-comprobar
+          </button>
+        </div>
+      )}
+
+      {/* Banner de Alerta Dinámica / Toast Interactivo de Errores o Notificaciones */}
+      {activeAlert && (
+        <div
+          className={`p-3.5 rounded-xl text-xs flex items-start justify-between gap-3 shadow-xl transition-all border ${
+            activeAlert.type === "error"
+              ? "bg-rose-500/10 text-rose-200 border-rose-500/30"
+              : activeAlert.type === "warning"
+              ? "bg-amber-500/10 text-amber-200 border-amber-500/30"
+              : "bg-indigo-500/10 text-indigo-200 border-indigo-500/30"
+          }`}
+        >
+          <div className="flex items-start gap-2.5">
+            {activeAlert.type === "error" ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+            ) : activeAlert.type === "warning" ? (
+              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            ) : (
+              <Info className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+            )}
+            <div>
+              <h4 className="font-bold mb-0.5 text-white">{activeAlert.title}</h4>
+              <p className="leading-relaxed">{activeAlert.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveAlert(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Alerta Informativa de Límites y Cuotas expresada en URLs Diarias */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-md">
