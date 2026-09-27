@@ -57,7 +57,7 @@ export default function Home() {
 
   // Estado para el modal de Conectar con LLMs
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
-  const [activeDocTab, setActiveDocTab] = useState<"chatgpt" | "claude" | "python" | "n8n">("chatgpt");
+  const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   const copyToClipboard = (text: string) => {
@@ -841,6 +841,7 @@ export default function Home() {
             {/* Selector de Pestañas */}
             <div className="flex border-b border-slate-800 gap-1 mb-4 overflow-x-auto pb-1">
               {[
+                { id: "direct", label: "💬 Prompt Directo (ChatGPT / Claude / Gemini)" },
                 { id: "chatgpt", label: "🤖 Custom GPTs (OpenAI)" },
                 { id: "claude", label: "💻 Claude & Cursor (MCP)" },
                 { id: "python", label: "🐍 Python & cURL" },
@@ -862,6 +863,58 @@ export default function Home() {
 
             {/* Contenido Dinámico por Pestaña */}
             <div className="flex-1 overflow-y-auto pr-1 text-xs space-y-3 text-slate-300">
+              {activeDocTab === "direct" && (
+                <div className="space-y-3.5">
+                  <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3 text-slate-200">
+                    <p className="font-semibold text-indigo-300 flex items-center gap-1.5 mb-1">
+                      <span>✨ Conexión Inmediata Sin Configuración</span>
+                    </p>
+                    <p className="text-[11px] text-slate-300">
+                      Pega cualquiera de estos prompts en cualquier chat con navegación web o acceso a internet (<strong>ChatGPT Plus/Team</strong>, <strong>Claude</strong>, <strong>Gemini Advanced</strong>, <strong>Copilot</strong> o <strong>Perplexity</strong>). La IA consultará tu endpoint de Scrapio en vivo.
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-semibold text-white text-xs">Opción 1: Listar Sitios / Clientes (Prompt Rápido)</span>
+                      <button
+                        onClick={() => copyToClipboard("Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente")}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar Prompt</span>
+                      </button>
+                    </div>
+                    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-300 select-all">
+                      Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-semibold text-white text-xs">Opción 2: Prompt Completo de Asistente RAG Autónomo</span>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(
+                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace || "avafin-mx-blog"}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
+                          )
+                        }
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar Prompt Completo</span>
+                      </button>
+                    </div>
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-200 whitespace-pre-line leading-relaxed select-all">
+                      {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
+1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace || "avafin-mx-blog"}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
+3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {activeDocTab === "chatgpt" && (
                 <div className="space-y-3">
                   <p className="text-slate-200">
