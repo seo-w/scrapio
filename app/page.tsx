@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2 } from "lucide-react";
+import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info } from "lucide-react";
 
 interface Message {
   id: string;
@@ -17,6 +17,7 @@ interface NamespaceInfo {
 
 export default function Home() {
   const [namespace, setNamespace] = useState("cliente-avafin");
+  const [aiProvider, setAiProvider] = useState("gemini");
   const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
   const [isManualInput, setIsManualInput] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
@@ -24,7 +25,7 @@ export default function Home() {
     {
       id: "1",
       role: "assistant",
-      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar un sitio web de la lista de escaneados, presionar '🔄 Actualizar' para re-escanearlo, o presionar '➕ Nuevo Sitio' para agregar un nuevo cliente.",
+      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes elegir qué modelo usar (Gemini u OpenAI), seleccionar un sitio escaneado, actualizar sus datos o agregar un nuevo cliente.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +39,6 @@ export default function Home() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Cargar la lista de namespaces / sitios escaneados desde Pinecone
   const fetchNamespaces = async () => {
     setIsLoadingNamespaces(true);
     try {
@@ -61,7 +61,6 @@ export default function Home() {
     fetchNamespaces();
   }, []);
 
-  // Función para adivinar/auto-rellenar la URL según el namespace seleccionado
   const inferUrlFromNamespace = (nsName: string) => {
     if (!nsName) return "";
     const clean = nsName.toLowerCase().replace(/^cliente-/, "");
@@ -92,6 +91,7 @@ export default function Home() {
         body: JSON.stringify({
           query: userMessage.content,
           namespace: namespace.trim(),
+          aiProvider,
         }),
       });
 
@@ -138,6 +138,7 @@ export default function Home() {
           targetUrl: scanUrl.trim(),
           clientNamespace: scanNamespace.trim(),
           maxPages: parseInt(scanMaxPages, 10) || 50,
+          aiProvider,
         }),
       });
 
@@ -201,6 +202,22 @@ export default function Home() {
 
         {/* Action Controls Bar */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          {/* Selector de Modelo de IA */}
+          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
+              <Cpu className="w-4 h-4 text-emerald-400" />
+              <span>Modelo IA:</span>
+            </div>
+            <select
+              value={aiProvider}
+              onChange={(e) => setAiProvider(e.target.value)}
+              className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
+            >
+              <option value="gemini">Google Gemini 3.8 Flash (Gratis ~1,500 RPD)</option>
+              <option value="openai">OpenAI GPT-4o Mini (Pago por uso / Créditos)</option>
+            </select>
+          </div>
+
           {/* Botón 1: Nuevo Sitio */}
           <button
             onClick={openNewSiteModal}
@@ -280,6 +297,27 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Alerta Informativa de Límites y Cuotas según el Modelo Activo */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-md">
+        <div className="flex items-center gap-2 text-slate-300">
+          <Info className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span>
+            Modelo Activo: <strong className="text-white font-semibold font-mono">{aiProvider === "gemini" ? "Google Gemini 3.8 Flash + embedding-001" : "OpenAI GPT-4o Mini + text-embedding-3-small"}</strong>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {aiProvider === "gemini" ? (
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[11px]">
+              🎁 Cuota Gratuita: Hasta ~1,500 peticiones/día (~15/min) en Google AI Studio
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono text-[11px]">
+              💳 Cuota de Pago/Créditos: Sin límite rígido diario (Requiere OPENAI_API_KEY)
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Chat Area */}
       <main className="flex-1 bg-slate-900/70 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col justify-between overflow-hidden shadow-2xl backdrop-blur-sm">
         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
@@ -345,7 +383,7 @@ export default function Home() {
               </div>
               <div className="bg-slate-800/90 border border-slate-700/60 rounded-2xl rounded-tl-xs p-4 text-xs text-slate-400 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-indigo-400 animate-spin" />
-                <span>Buscando vectores en Pinecone (namespace: <strong className="text-white font-mono">{namespace}</strong>) y generando respuesta...</span>
+                <span>Buscando vectores en Pinecone con modelo <strong className="text-white font-mono">{aiProvider}</strong> (namespace: <strong className="text-white font-mono">{namespace}</strong>) y generando respuesta...</span>
               </div>
             </div>
           )}
@@ -357,7 +395,7 @@ export default function Home() {
             type="text"
             value={inputQuery}
             onChange={(e) => setInputQuery(e.target.value)}
-            placeholder={`Haz una pregunta sobre los datos de ${namespace}...`}
+            placeholder={`Haz una pregunta a ${aiProvider === "gemini" ? "Gemini 3.8 Flash" : "GPT-4o Mini"} sobre ${namespace}...`}
             className="flex-1 bg-slate-950 text-sm text-white px-4 py-3 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
           />
           <button
@@ -388,7 +426,7 @@ export default function Home() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">Escanear / Actualizar Sitio Web</h3>
-                <p className="text-xs text-slate-400">Envia la orden a GitHub Actions para procesar la información en Pinecone</p>
+                <p className="text-xs text-slate-400">Envia la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}</p>
               </div>
             </div>
 

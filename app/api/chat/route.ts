@@ -5,7 +5,7 @@ import { queryPinecone } from "@/lib/pinecone";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { query, namespace } = body;
+    const { query, namespace, aiProvider } = body;
 
     if (!query || typeof query !== "string") {
       return NextResponse.json(
@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Vectorizar la consulta del usuario
-    const queryVector = await generateEmbedding(query);
+    // 1. Vectorizar la consulta del usuario usando el proveedor seleccionado
+    const queryVector = await generateEmbedding(query, aiProvider);
 
     // 2. Recuperar el contexto relevante desde Pinecone acotado al namespace
     const matches = await queryPinecone(namespace, queryVector, 4);
@@ -40,13 +40,14 @@ export async function POST(req: NextRequest) {
       text: match.metadata.text_chunk,
     }));
 
-    // 3. Generar la respuesta RAG mediante el modelo LLM de Gemini
-    const { text, sources } = await generateRAGResponse(query, contextChunks);
+    // 3. Generar la respuesta RAG mediante el modelo seleccionado (Gemini u OpenAI)
+    const { text, sources } = await generateRAGResponse(query, contextChunks, aiProvider);
 
     return NextResponse.json({
       answer: text,
       sources,
       matchesCount: matches.length,
+      providerUsed: aiProvider || process.env.AI_PROVIDER || "gemini",
     });
   } catch (error: any) {
     console.error("Error en /api/chat:", error);

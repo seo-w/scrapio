@@ -12,7 +12,7 @@ function getGenAIClient() {
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("Falta la variable de entorno OPENAI_API_KEY");
+    throw new Error("Falta la variable de entorno OPENAI_API_KEY en Vercel/env.");
   }
   return new OpenAI({ apiKey });
 }
@@ -24,17 +24,17 @@ export interface ContextChunk {
 }
 
 /**
- * Genera un vector embedding de 768 dimensiones soportando alternancia entre Gemini y OpenAI
+ * Genera un vector embedding de 768 dimensiones soportando alternancia dinámica entre Gemini y OpenAI
  */
-export async function generateEmbedding(text: string, retries = 3): Promise<number[]> {
-  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+export async function generateEmbedding(text: string, overrideProvider?: string, retries = 3): Promise<number[]> {
+  const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
 
   if (provider === "openai") {
     const openai = getOpenAIClient();
     const res = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: text,
-      dimensions: 768, // Ajustado exactamente a las 768 dimensiones del índice Pinecone
+      dimensions: 768,
     });
     return res.data[0].embedding;
   }
@@ -77,8 +77,9 @@ export async function generateEmbedding(text: string, retries = 3): Promise<numb
  */
 export async function generateEmbeddingsBatch(
   texts: string[],
-  batchSize = 5,
-  delayMs = 250
+  overrideProvider?: string,
+  batchSize = 3,
+  delayMs = 350
 ): Promise<{ vectors: number[][]; processedCount: number; quotaExhausted: boolean }> {
   const vectors: number[][] = [];
   let quotaExhausted = false;
@@ -89,7 +90,7 @@ export async function generateEmbeddingsBatch(
     
     try {
       const batchResults = await Promise.all(
-        batch.map((t) => generateEmbedding(t))
+        batch.map((t) => generateEmbedding(t, overrideProvider))
       );
       vectors.push(...batchResults);
     } catch (err: any) {
@@ -118,13 +119,14 @@ export async function generateEmbeddingsBatch(
 }
 
 /**
- * Genera una respuesta RAG estricta usando Gemini (gemini-3.8-flash) u OpenAI (gpt-4o-mini)
+ * Genera una respuesta RAG estricta usando Gemini u OpenAI según la preferencia dinámica
  */
 export async function generateRAGResponse(
   query: string,
-  contextChunks: ContextChunk[]
+  contextChunks: ContextChunk[],
+  overrideProvider?: string
 ): Promise<{ text: string; sources: string[] }> {
-  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
   const formattedContext = contextChunks
     .map((chunk, index) => `[Fuente ${index + 1}] (URL: ${chunk.url}, H1: ${chunk.h1}):\n${chunk.text}`)
     .join("\n\n---\n\n");

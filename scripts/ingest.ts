@@ -53,7 +53,7 @@ async function main() {
   console.log(`\n🧠 Iniciando fase 2: Generación de vectores embeddings (${chunks.length} chunks)...`);
 
   const chunkTexts = chunks.map((c) => c.text);
-  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, 3, 350);
+  const { vectors, processedCount, quotaExhausted } = await generateEmbeddingsBatch(chunkTexts, undefined, 3, 350);
 
   const upsertItems: UpsertItem[] = [];
 
