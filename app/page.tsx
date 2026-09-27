@@ -158,8 +158,9 @@ export default function Home() {
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
 
-  // Consultas del día
-  const [dailyQueries, setDailyQueries] = useState(234);
+  // Consultas del día diferenciadas por proveedor de IA
+  const [geminiQueries, setGeminiQueries] = useState(234);
+  const [openaiQueries, setOpenaiQueries] = useState(48);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -304,7 +305,11 @@ export default function Home() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      setDailyQueries((prev) => prev + 1);
+      if (aiProvider === "gemini") {
+        setGeminiQueries((prev) => prev + 1);
+      } else {
+        setOpenaiQueries((prev) => prev + 1);
+      }
     } catch (err: any) {
       setMessages((prev) => [
         ...prev,
@@ -565,31 +570,65 @@ export default function Home() {
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span> OK
             </span>
           </div>
+
           <div>
             <div className="text-base font-bold text-slate-900">
               {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "OpenAI GPT-4o Mini"}
             </div>
             <div className="text-base text-slate-500 mt-0.5">
-              {aiProvider === "gemini" ? "embedding-001" : "text-embedding-3-small"} · Pinecone
+              {aiProvider === "gemini" ? "gemini-embedding-001" : "text-embedding-3-small"} · Pinecone
             </div>
           </div>
-          <div className="pt-2 border-t border-slate-100">
-            <div className="text-base font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              Cuota diaria de consultas
+
+          {aiProvider === "gemini" ? (
+            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold text-slate-500 uppercase tracking-wider">
+                  Cuota diaria (Google)
+                </span>
+                <span className="text-base font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                  Nivel Gratis
+                </span>
+              </div>
+              {/* Progress Bar */}
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, (geminiQueries / 750) * 100)}%` }}
+                ></div>
+              </div>
+              <div className="flex items-center justify-between mt-1 text-base text-slate-600 font-medium">
+                <span>
+                  <strong className="text-slate-900 font-bold">{geminiQueries}</strong> / 750 hoy
+                </span>
+                <span className="text-slate-500 text-base">{750 - geminiQueries} restantes</span>
+              </div>
             </div>
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (dailyQueries / 750) * 100)}%` }}
-              ></div>
+          ) : (
+            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold text-slate-500 uppercase tracking-wider">
+                  Consumo API (OpenAI)
+                </span>
+                <span className="text-base font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                  Pay-as-you-go
+                </span>
+              </div>
+              {/* Progress Bar */}
+              <div className="w-full bg-emerald-100 h-2 rounded-full overflow-hidden">
+                <div className="bg-emerald-600 h-full rounded-full" style={{ width: "100%" }}></div>
+              </div>
+              <div className="flex items-center justify-between mt-1 text-base text-slate-600 font-medium">
+                <span>
+                  <strong className="text-slate-900 font-bold">{openaiQueries}</strong> consultas hoy
+                </span>
+                <span className="text-emerald-800 font-bold text-base">Sin tope diario</span>
+              </div>
+              <div className="text-base text-slate-500 mt-1">
+                Tarifa: ~$0.15 USD / 1M tokens
+              </div>
             </div>
-            <div className="flex items-center justify-between mt-1.5 text-base text-slate-600 font-medium">
-              <span>
-                <strong className="text-slate-900 font-bold">{dailyQueries}</strong> / 750 hoy
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       </aside>
       {/* END: Sidebar */}
@@ -826,24 +865,44 @@ export default function Home() {
                 style={{ backgroundColor: "transparent" }}
               />
 
-              <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100">
-                {/* Filter parameter pills */}
-                <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100 flex-wrap gap-3">
+                {/* Filter parameter pills: Both models visible and clickable */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-base font-semibold text-slate-500 mr-1">Modelo:</span>
                   <button
                     type="button"
-                    onClick={() => setAiProvider(aiProvider === "gemini" ? "openai" : "gemini")}
-                    className="px-3 py-1.5 rounded-xl border border-[#DCE4ED] bg-slate-50 text-base font-semibold text-slate-800 hover:bg-white transition-colors cursor-pointer"
+                    onClick={() => setAiProvider("gemini")}
+                    className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                      aiProvider === "gemini"
+                        ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
+                    }`}
                   >
-                    {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "OpenAI GPT-4o Mini"}
+                    <span>Gemini 3.8 Flash</span>
+                    {aiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-white"></span>}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider("openai")}
+                    className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                      aiProvider === "openai"
+                        ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
+                        : "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
+                    }`}
+                  >
+                    <span>OpenAI GPT-4o Mini</span>
+                    {aiProvider === "openai" && <span className="w-2 h-2 rounded-full bg-white"></span>}
+                  </button>
+
                   <button
                     type="button"
                     title="Top-K: Cantidad de fragmentos más relevantes recuperados de Pinecone para alimentar el contexto de la IA (6 fragmentos)"
-                    className="px-3 py-1.5 rounded-xl border border-[#DCE4ED] bg-slate-50 text-base font-semibold text-slate-800 hover:bg-white transition-colors cursor-help"
+                    className="px-3.5 py-1.5 rounded-xl border border-[#DCE4ED] bg-slate-50 text-base font-semibold text-slate-700 hover:bg-white transition-colors cursor-help"
                   >
                     Top-K 6
                   </button>
-                  <span className="text-base text-slate-500 hidden sm:inline ml-1 font-normal">
+                  <span className="text-base text-slate-500 hidden xl:inline ml-1 font-normal">
                     Solo responde con evidencia del namespace activo
                   </span>
                 </div>
