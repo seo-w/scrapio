@@ -158,10 +158,18 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
       
       const response = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 ScrapioBot/1.0",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
       });
+
+      if (response.status === 429) {
+        console.warn(`⏳ El sitio respondió con HTTP 429 (Límite de peticiones). Pausando 3.5 segundos antes de reintentar ${url}...`);
+        visitedUrls.delete(url); // Permitir reintento
+        queue.unshift({ url, depth }); // Devolver a la cola
+        await new Promise((res) => setTimeout(res, 3500));
+        continue;
+      }
 
       if (!response.ok) {
         console.warn(`⚠️ HTTP ${response.status} en ${url}`);
@@ -209,6 +217,9 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
           }
         });
       }
+
+      // Pequeña pausa amigable (150ms) entre peticiones para evitar activar el rate limit del sitio
+      await new Promise((res) => setTimeout(res, 150));
 
     } catch (err: any) {
       console.error(`❌ Error scrapeando ${url}:`, err.message || err);
