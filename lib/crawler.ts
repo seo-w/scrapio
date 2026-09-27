@@ -196,9 +196,26 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
 
       const h1Text = $("h1").first().text().trim() || $("title").text().trim() || "Sin Título";
 
+      // 1. Detectar y convertir imágenes que son enlaces a portales/formularios en CTAs explícitos
+      $("a").each((_, el) => {
+        const $a = $(el);
+        const $img = $a.find("img");
+        if ($img.length > 0 && !$a.text().trim()) {
+          const alt = $img.attr("alt")?.trim() || $img.attr("title")?.trim() || "Imagen con enlace";
+          const href = $a.attr("href") || "";
+          if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
+            $a.replaceWith(`<p><strong>[Banner de Conversión / CTA: "${alt}"](${href})</strong></p>`);
+          }
+        }
+      });
+
+      // 2. Eliminar ruido visual e interfaces repetitivas
       $("nav, footer, header, script, style, noscript, svg, iframe, form").remove();
 
-      const mainContainer = $("main, article, .content, #content, body").first();
+      // 3. Selección jerárquica del contenedor principal con fallback seguro a <body>
+      const mainContainer = $(
+        "main, article, [role='main'], #main-content, #content, .post-content, .entry-content, .article-content, .page-content, .blog-post, .content, body"
+      ).first();
       const htmlContent = mainContainer.html() || "";
 
       const markdown = turndownService.turndown(htmlContent).trim();
