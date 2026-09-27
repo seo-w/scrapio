@@ -1,0 +1,296 @@
+<!DOCTYPE html><html lang="es"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Scrapio - Consulta Web RAG</title>
+<!-- Tailwind CSS CDN with forms and container queries plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#EEF2FF',
+              100: '#E0E7FF',
+              500: '#4F46E5',
+              600: '#2563EB',
+              700: '#1D4ED8',
+            },
+            app: {
+              bg: '#E9EEF5',
+              surface: '#FFFFFF',
+              border: '#E2E8F0',
+            }
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-layout">
+    body {
+      background-color: #EBF0F6;
+      color: #0F172A;
+      font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    }
+    /* Subtle custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex antialiased select-none font-sans text-slate-800" style="background-color: #CCD6E0; color: #0F172A;">
+<!-- BEGIN: Sidebar -->
+<aside class="w-72 bg-[#F6F8FB] border-r border-[#DCE4EC] flex flex-col justify-between shrink-0 h-screen sticky top-0 px-4 py-5 select-none" data-purpose="sidebar-navigation" style="background-color: rgb(248, 250, 252); border-right: 1px solid rgb(203, 213, 225);">
+<!-- Top Nav Container -->
+<div class="space-y-6">
+<!-- App Brand Logo -->
+<div class="flex items-center gap-3 px-2">
+<div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+          S
+        </div>
+<div>
+<h1 class="font-bold text-[15px] leading-tight text-slate-900 tracking-tight">Scrapio</h1>
+<p class="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">WEB RAG</p>
+</div>
+</div>
+<!-- Client Context Selector -->
+<div>
+<div class="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+          Contexto de cliente
+        </div>
+<div class="mt-1 bg-white border border-[#DCE4ED] rounded-xl p-3 shadow-xs hover:border-slate-300 transition-colors cursor-pointer group" style="background-color: rgb(255, 255, 255); border: 1px solid rgb(226, 232, 240);">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-lg bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shrink-0">
+                PB
+              </div>
+<div class="overflow-hidden">
+<div class="text-xs font-semibold text-slate-900 truncate">Personal Bliss</div>
+<div class="text-[11px] text-slate-400 truncate">personalbliss.org · 4.812 vectores</div>
+</div>
+</div>
+<svg class="w-4 h-4 text-slate-400 shrink-0 group-hover:text-slate-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M8 9l4-4 4 4m0 6l-4 4-4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+<button class="mt-2.5 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors">
+<span class="text-base font-normal leading-none">+</span>
+<span class="">Nuevo espacio de cliente</span>
+</button>
+</div>
+<!-- Work Section Menu Links -->
+<nav class="space-y-1" data-purpose="work-navigation">
+<div class="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+          Trabajo
+        </div>
+<!-- Active Link: Consulta -->
+<a class="flex items-center justify-between px-3 py-2 rounded-xl bg-[#E0E7FF] text-[#2563EB] font-medium text-xs shadow-2xs" href="#">
+<div class="flex items-center gap-2.5">
+<svg class="w-4 h-4 text-[#2563EB]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span class="">Consulta</span>
+</div>
+</a>
+<!-- Clientes -->
+<a class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span class="">Clientes</span>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">6</span>
+</a>
+<!-- Rastreos -->
+<a class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span class="">Rastreos</span>
+</div>
+<span class="text-[11px] font-medium text-slate-500">1 activo</span>
+</a>
+<!-- Integraciones -->
+<a class="flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span class="">Integraciones</span>
+</div>
+</a>
+</nav>
+</div>
+<!-- Bottom System Status Card -->
+<div class="bg-white border border-[#DCE4ED] rounded-xl p-3.5 shadow-2xs space-y-3" data-purpose="system-status-card" style="background-color: rgb(255, 255, 255); border: 1px solid rgb(226, 232, 240);">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Motor Activo</span>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> OK
+        </span>
+</div>
+<div>
+<div class="text-xs font-bold text-slate-900">Gemini 3.8 Flash</div>
+<div class="text-[11px] text-slate-400 mt-0.5">embedding-001 · Pinecone</div>
+</div>
+<div class="pt-1.5 border-t border-slate-100">
+<div class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+          Cuota diaria de consultas
+        </div>
+<!-- Progress Bar -->
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-blue-600 h-full rounded-full" style="width: 31%;"></div>
+</div>
+<div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 font-medium">
+<span class=""><strong class="text-slate-800">233</strong> / 750 hoy</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 flex flex-col min-w-0 bg-[#EBF0F6] overflow-y-auto" style="background-color: #CCD6E0;">
+<!-- Top Header Bar -->
+<header class="border-b border-[#D8E1EA] px-8 py-5 flex items-center justify-between bg-white/40 backdrop-blur-xs sticky top-0 z-10" style="background-color: rgb(255, 255, 255); border-bottom: 1px solid rgb(203, 213, 225); box-shadow: rgba(0, 0, 0, 0.05) 0px 1px 3px 0px;">
+<div>
+<h2 class="text-xl font-bold text-slate-900 leading-snug">Consulta</h2>
+<p class="text-xs text-slate-500 mt-0.5">Respuestas sintetizadas solo desde el conocimiento indexado de <span class="font-medium text-slate-700">Personal Bliss</span>.</p>
+</div>
+<div class="flex items-center gap-3">
+<!-- Live crawling chip indicator -->
+<div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-xs font-medium border border-[#FDE68A]">
+<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+<span class="">1 rastreo en curso · 62%</span>
+</div>
+<!-- Engine selector pill -->
+<div class="bg-white border border-[#DCE4ED] px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer transition-colors" style="background-color: #FFFFFF; border-color: #94A3B8;">
+          Motor: Gemini
+        </div>
+<!-- Primary crawl trigger button -->
+<button class="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all">
+<span class="">Rastrear sitio</span>
+</button>
+</div>
+</header>
+<!-- Content Workspace -->
+<div class="max-w-6xl w-full mx-auto px-8 py-6 flex-1 flex flex-col space-y-6">
+<!-- Active Namespace Subheader Banner -->
+<section class="bg-white border border-[#DCE4ED] rounded-xl px-4 py-2.5 flex items-center justify-between shadow-2xs" data-purpose="namespace-bar" style="background-color: #FFFFFF; border-color: #94A3B8;">
+<div class="flex items-center gap-3 text-xs">
+<span class="bg-[#EEF2FF] text-[#4F46E5] font-semibold text-[11px] px-2.5 py-0.5 rounded-md border border-indigo-100">
+            Namespace aislado
+          </span>
+<span class="font-mono text-slate-800 font-medium">pb_personalbliss_org</span>
+<span class="text-slate-300">·</span>
+<span class="text-slate-500">312 páginas · 4.812 vectores · última actualización hace 2 h</span>
+</div>
+<button class="text-xs font-semibold text-slate-700 hover:text-slate-900 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-3 py-1 rounded-lg transition-colors">
+          Cambiar cliente
+        </button>
+</section>
+<!-- Chat Thread Section -->
+<section class="space-y-6 flex-1" data-purpose="chat-thread">
+<!-- User Query Bubble (Right-aligned) -->
+<div class="flex justify-end">
+<div class="max-w-xl bg-[#1E293B] text-white text-[13px] px-4 py-2.5 rounded-2xl rounded-tr-xs shadow-sm font-normal leading-relaxed">
+            ¿Cuál es la política de devoluciones y en qué ciudades entregan?
+          </div>
+</div>
+<!-- Assistant Scrapio Response Card -->
+<article class="bg-white border border-[#DCE4ED] rounded-2xl p-6 shadow-2xs space-y-5" data-purpose="assistant-response" style="background-color: #FFFFFF; border-color: #94A3B8;">
+<!-- Card Header info -->
+<div class="flex items-center justify-between pb-1 border-b border-slate-100/80">
+<div class="flex items-center gap-2.5">
+<div class="w-6 h-6 rounded-md bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                S
+              </div>
+<span class="font-bold text-xs text-slate-900">Scrapio</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-medium border border-emerald-100/80">
+                3 fuentes verificadas
+              </span>
+</div>
+<div class="text-[11px] text-slate-400 font-mono">
+              1.284 tokens · 2,1 s
+            </div>
+</div>
+<!-- Synthesized Answer Text -->
+<div class="text-[13px] text-slate-700 leading-relaxed space-y-3 font-normal">
+<p class="">
+              Las devoluciones se aceptan dentro de los <strong class="text-slate-900 font-semibold">5 días hábiles</strong> siguientes a la entrega, siempre que el producto conserve su empaque original y no haya sido abierto. Los perfumes y suplementos abiertos quedan excluidos por política sanitaria.<sup class="text-blue-600 font-bold ml-0.5 cursor-pointer hover:underline">1,2</sup>
+</p>
+<p class="">
+              El envío cubre <strong class="text-slate-900 font-semibold">todo el territorio colombiano</strong>: 1 a 2 días hábiles en Bogotá, Medellín, Cali y Barranquilla, y 3 a 5 días hábiles en el resto del país. Envío gratuito por encima de $150.000 COP.<sup class="text-blue-600 font-bold ml-0.5 cursor-pointer hover:underline">3</sup>
+</p>
+</div>
+<!-- Evidence & Indexed Pages Section -->
+<div class="pt-2">
+<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+              Evidencia · Páginas indexadas consultadas
+            </div>
+<div class="space-y-2"><div class="flex items-center justify-between p-3 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all" style="background-color: #EEF3F8;"><div class="flex items-start gap-3"><span class="w-5 h-5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0 border border-emerald-100">1</span><div><h4 class="text-xs font-semibold text-slate-900 leading-none">Política de devoluciones y garantías</h4><p class="text-[11px] font-mono text-slate-500 mt-1">personalbliss.org/politicas/devoluciones</p></div></div><div class="text-xs font-mono font-semibold text-slate-700 bg-slate-200/70 px-2 py-0.5 rounded-md">0.91</div></div><div class="flex items-center justify-between p-3 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all" style="background-color: #EEF3F8;"><div class="flex items-start gap-3"><span class="w-5 h-5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0 border border-emerald-100">2</span><div><h4 class="text-xs font-semibold text-slate-900 leading-none">Términos y condiciones</h4><p class="text-[11px] font-mono text-slate-500 mt-1">personalbliss.org/terminos-y-condiciones</p></div></div><div class="text-xs font-mono font-semibold text-slate-700 bg-slate-200/70 px-2 py-0.5 rounded-md">0.87</div></div><div class="flex items-center justify-between p-3 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all" style="background-color: #EEF3F8;"><div class="flex items-start gap-3"><span class="w-5 h-5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0 border border-emerald-100">3</span><div><h4 class="text-xs font-semibold text-slate-900 leading-none">Envíos y tiempos de entrega</h4><p class="text-[11px] font-mono text-slate-500 mt-1">personalbliss.org/envios</p></div></div><div class="text-xs font-mono font-semibold text-slate-700 bg-slate-200/70 px-2 py-0.5 rounded-md">0.84</div></div></div>
+<!-- Action buttons inside response -->
+<div class="flex items-center gap-2 mt-3 pt-2">
+<button class="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors">
+                Copiar con citas
+              </button>
+<button class="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors">
+                Exportar a Markdown
+              </button>
+<button class="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors">
+                Ver fragmentos recuperados
+              </button>
+</div>
+</div>
+</article>
+</section>
+<!-- Bottom Interactive Composer Bar Container -->
+<section class="space-y-3 pt-2" data-purpose="prompt-composer-container">
+<!-- Prompt Box -->
+<div class="bg-white border border-[#DCE4ED] rounded-2xl p-4 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all" style="background-color: #FFFFFF; border-color: #94A3B8;">
+<textarea class="w-full border-0 p-0 text-xs text-slate-800 placeholder-slate-400 focus:ring-0 resize-none font-normal leading-relaxed" placeholder="Pregunta sobre precios, políticas, servicios o cualquier contenido indexado de Personal Bliss..." rows="2" style="background-color: transparent;"></textarea>
+<div class="flex items-center justify-between pt-3 mt-1 border-t border-slate-100">
+<!-- Filter parameter pills -->
+<div class="flex items-center gap-2">
+<button class="px-2.5 py-1 rounded-lg border border-[#DCE4ED] bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-white transition-colors">
+                Gemini 3.8 Flash
+              </button>
+<button class="px-2.5 py-1 rounded-lg border border-[#DCE4ED] bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-white transition-colors">
+                Top-K 6
+              </button>
+<span class="text-[11px] text-slate-400 hidden sm:inline ml-1 font-normal">
+                Solo responde con evidencia del namespace activo
+              </span>
+</div>
+<!-- Submit Button -->
+<button class="bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold px-4 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5">
+<span class="">Enviar</span>
+</button>
+</div>
+</div>
+<!-- Quick Prompt Chips / Suggestions -->
+<div class="flex items-center gap-2 overflow-x-auto pb-2 text-xs" style="background-color: transparent;"><button class="whitespace-nowrap px-3 py-1.5 rounded-xl border border-[#cbd5e1] text-slate-800 hover:bg-slate-50 text-xs font-medium shadow-2xs transition-colors" style="background-color: #FFFFFF; border-color: #94A3B8;">Resume los servicios</button><button class="whitespace-nowrap px-3 py-1.5 rounded-xl border border-[#cbd5e1] text-slate-800 hover:bg-slate-50 text-xs font-medium shadow-2xs transition-colors" style="background-color: #FFFFFF; border-color: #94A3B8;">Lista de precios publicados</button><button class="whitespace-nowrap px-3 py-1.5 rounded-xl border border-[#cbd5e1] text-slate-800 hover:bg-slate-50 text-xs font-medium shadow-2xs transition-colors" style="background-color: #FFFFFF; border-color: #94A3B8;">¿Qué cambió desde el último rastreo?</button></div>
+</section>
+</div>
+</main>
+<!-- END: MainContent -->
+
+
+</body></html>

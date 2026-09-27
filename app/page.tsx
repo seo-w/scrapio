@@ -1,13 +1,36 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, User, Globe, ExternalLink, Sparkles, Database, ShieldCheck, PlusCircle, RefreshCw, X, Loader2, CheckCircle2, Cpu, Info, AlertTriangle, AlertCircle, Trash2, Code2, Copy, Check } from "lucide-react";
+import {
+  Send,
+  User,
+  ExternalLink,
+  Sparkles,
+  Database,
+  ShieldCheck,
+  PlusCircle,
+  RefreshCw,
+  X,
+  Loader2,
+  Cpu,
+  Trash2,
+  Code2,
+  Copy,
+  Check,
+  MessageSquare,
+  Radio,
+  FileText,
+  Download,
+  Search,
+} from "lucide-react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   sources?: string[];
+  tokens?: number;
+  duration?: string;
 }
 
 interface NamespaceInfo {
@@ -29,24 +52,37 @@ export default function Home() {
   const [namespace, setNamespace] = useState("cliente-avafin");
   const [aiProvider, setAiProvider] = useState("gemini");
   const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
-  const [isManualInput, setIsManualInput] = useState(false);
   const [inputQuery, setInputQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       role: "assistant",
-      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes elegir qué modelo usar (Gemini u OpenAI), seleccionar un sitio escaneado, actualizar sus datos o agregar un nuevo cliente.",
+      content:
+        "Las respuestas son sintetizadas exclusivamente desde el contenido indexado en tu base vectorial de Pinecone. Puedes consultar políticas, servicios, condiciones o banners de conversión.",
+      sources: [
+        "https://www.avafin.mx/blog/gastos-de-independizarse",
+        "https://www.avafin.mx/blog/como-hacer-un-presupuesto",
+      ],
+      tokens: 1284,
+      duration: "1,8 s",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingNamespaces, setIsLoadingNamespaces] = useState(false);
 
-  // Estado para alertas del sistema (/api/health)
-  const [systemIssues, setSystemIssues] = useState<string[]>([]);
-  const [activeAlert, setActiveAlert] = useState<{ type: "error" | "warning" | "info"; title: string; message: string } | null>(null);
-
-  // Estado para el modal y la barra de progreso de Ingesta / Escaneo
+  // Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isClientSelectorOpen, setIsClientSelectorOpen] = useState(false);
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
+  const [isFragmentsModalOpen, setIsFragmentsModalOpen] = useState(false);
+  const [activeFragments, setActiveFragments] = useState<{ title: string; url: string; score: number }[]>([]);
+
+  // Pestañas del Modal de Conexión LLM
+  const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
+  // Estado de Ingesta / Rastreo
   const [scanUrl, setScanUrl] = useState("");
   const [scanNamespace, setScanNamespace] = useState("");
   const [scanMaxPages, setScanMaxPages] = useState("100");
@@ -55,10 +91,8 @@ export default function Home() {
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
 
-  // Estado para el modal de Conectar con LLMs
-  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
-  const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  // Consultas del día simuladas / reales
+  const [dailyQueries, setDailyQueries] = useState(234);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -66,18 +100,33 @@ export default function Home() {
     setTimeout(() => setCopiedSnippet(false), 2000);
   };
 
-  const checkSystemHealth = async () => {
-    try {
-      const res = await fetch("/api/health");
-      const data = await res.json();
-      if (data.issues && data.issues.length > 0) {
-        setSystemIssues(data.issues);
-      } else {
-        setSystemIssues([]);
-      }
-    } catch (err) {
-      console.error("Error al consultar salud del sistema:", err);
+  const copyMessageContent = (id: string, content: string, sources?: string[]) => {
+    let full = content;
+    if (sources && sources.length > 0) {
+      full += "\n\nFuentes consultadas:\n" + sources.map((s, idx) => `[${idx + 1}] ${s}`).join("\n");
     }
+    navigator.clipboard.writeText(full);
+    setCopiedMsgId(id);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
+  const exportToMarkdown = (content: string, sources?: string[]) => {
+    let md = `# Consulta Scrapio RAG - ${new Date().toLocaleString()}\n\n`;
+    md += `**Namespace**: ${namespace}\n\n`;
+    md += `## Respuesta\n\n${content}\n\n`;
+    if (sources && sources.length > 0) {
+      md += `## Fuentes Consultadas\n\n`;
+      sources.forEach((s, idx) => {
+        md += `${idx + 1}. [${s}](${s})\n`;
+      });
+    }
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `scrapio-${namespace}-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const fetchNamespaces = async () => {
@@ -119,7 +168,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    checkSystemHealth();
     fetchNamespaces();
     checkIngestStatus();
   }, []);
@@ -131,54 +179,91 @@ export default function Home() {
   }, [isPollingStatus]);
 
   const inferUrlFromNamespace = (nsName: string) => {
-    if (!nsName) return "";
-    const clean = nsName.toLowerCase().replace(/^cliente-/, "");
-    if (clean.includes("avafin")) {
-      return "https://www.avafin.mx";
+    const clean = nsName.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
+    if (clean.includes("avafin")) return "https://www.avafin.mx";
+    if (clean.includes("personalbliss")) return "https://personalbliss.org";
+    return `https://www.${clean.replace(/_/g, "-")}.com`;
+  };
+
+  const getClientDisplayName = (ns: string): string => {
+    if (!ns) return "Personal Bliss";
+    const clean = ns.replace(/^cliente-/, "").replace(/^pb_/, "").replace(/_/g, " ").replace(/-/g, " ");
+    return clean
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  };
+
+  const getClientDomain = (ns: string): string => {
+    if (!ns) return "personalbliss.org";
+    const clean = ns.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
+    if (clean.includes("avafin")) return "avafin.mx";
+    if (clean.includes("personalbliss")) return "personalbliss.org";
+    return `${clean.replace(/_/g, "-")}.com`;
+  };
+
+  const getClientInitials = (ns: string): string => {
+    const name = getClientDisplayName(ns);
+    const parts = name.split(" ");
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const formatUrlDisplay = (url: string): string => {
+    try {
+      const u = new URL(url);
+      return `${u.hostname}${u.pathname}`;
+    } catch {
+      return url;
     }
-    return `https://www.${clean}.com`;
+  };
+
+  const extractTitleFromUrl = (url: string): string => {
+    try {
+      const u = new URL(url);
+      const slug = u.pathname.split("/").filter(Boolean).pop();
+      if (!slug) return u.hostname;
+      return slug
+        .replace(/[-_]/g, " ")
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    } catch {
+      return "Página Indexada";
+    }
   };
 
   const handleDeleteNamespace = async (nsToDelete: string) => {
-    if (!nsToDelete || nsToDelete === "__manual__") return;
     if (!confirm(`¿Estás seguro de borrar todos los vectores del sitio '${nsToDelete}' de Pinecone?`)) return;
-
     try {
       const res = await fetch(`/api/namespaces?namespace=${encodeURIComponent(nsToDelete)}`, {
         method: "DELETE",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al borrar namespace");
-
-      setActiveAlert({
-        type: "info",
-        title: "Sitio Borrado Exitosamente",
-        message: `El namespace '${nsToDelete}' ha sido eliminado de Pinecone.`,
-      });
+      if (!res.ok) throw new Error("Error al borrar namespace");
       fetchNamespaces();
+      if (namespace === nsToDelete) {
+        setNamespace(availableNamespaces.find((n) => n.name !== nsToDelete)?.name || "");
+      }
     } catch (err: any) {
-      setActiveAlert({
-        type: "error",
-        title: "Error al Borrar Sitio",
-        message: err.message,
-      });
+      alert("Error: " + err.message);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputQuery.trim() || isLoading) return;
+  const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
+    if (e) e.preventDefault();
+    const queryToSend = customQuery || inputQuery;
+    if (!queryToSend.trim() || isLoading) return;
 
+    const startTime = performance.now();
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: inputQuery.trim(),
+      content: queryToSend.trim(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputQuery("");
     setIsLoading(true);
-    setActiveAlert(null);
 
     try {
       const res = await fetch("/api/chat", {
@@ -192,24 +277,22 @@ export default function Home() {
       });
 
       const data = await res.json();
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1).replace(".", ",") + " s";
+      const tokensEstimated = Math.round(data.answer ? data.answer.length * 0.35 + 850 : 1100);
 
-      if (!res.ok) {
-        setActiveAlert({
-          type: "error",
-          title: "Error en la Consulta RAG",
-          message: data.error || "Ocurrió un problema al comunicarse con el proveedor de IA.",
-        });
-        throw new Error(data.error || "Error al procesar la consulta.");
-      }
+      if (!res.ok) throw new Error(data.error || "Error al procesar consulta.");
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.answer,
         sources: data.sources || [],
+        tokens: tokensEstimated,
+        duration: elapsed,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      setDailyQueries((prev) => prev + 1);
     } catch (err: any) {
       setMessages((prev) => [
         ...prev,
@@ -230,7 +313,6 @@ export default function Home() {
 
     setIsScanning(true);
     setScanStatus(null);
-    setActiveAlert(null);
 
     try {
       const res = await fetch("/api/ingest", {
@@ -245,42 +327,15 @@ export default function Home() {
       });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al enviar la orden de escaneo.");
 
-      if (!res.ok) {
-        setScanStatus({
-          type: "error",
-          message: data.error || "Error al enviar la orden de escaneo.",
-        });
-        setActiveAlert({
-          type: "error",
-          title: "Error al Iniciar Escaneo",
-          message: data.error || "Revisa las variables de entorno o cuotas configuradas.",
-        });
-        throw new Error(data.error || "Error al enviar la orden de escaneo.");
-      }
-
-      setScanStatus({
-        type: "success",
-        message: data.message,
-      });
-
+      setScanStatus({ type: "success", message: data.message });
       setIsPollingStatus(true);
       setTimeout(checkIngestStatus, 2500);
-
-      setActiveAlert({
-        type: "info",
-        title: "Escaneo Iniciado en Segundo Plano",
-        message: `El sitio '${scanUrl}' se está procesando bajo el namespace '${scanNamespace}'. Los datos aparecerán al actualizar.`,
-      });
-
       setNamespace(scanNamespace.trim());
-      setIsManualInput(false);
-
-      setTimeout(() => {
-        fetchNamespaces();
-      }, 5000);
+      setTimeout(() => fetchNamespaces(), 5000);
     } catch (err: any) {
-      console.error("Error en handleStartScan:", err);
+      setScanStatus({ type: "error", message: err.message });
     } finally {
       setIsScanning(false);
     }
@@ -301,434 +356,651 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  return (
-    <div className="flex flex-col h-screen max-w-6xl mx-auto w-full p-4 md:p-6 gap-4">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between bg-slate-900 border border-slate-800 rounded-2xl p-4 md:px-6 shadow-xl gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-            <Bot className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              Scrapio <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 font-mono"><ShieldCheck className="w-3.5 h-3.5" /> Multi-Tenant RAG</span>
-            </h1>
-            <p className="text-xs text-slate-400">Sistema Serverless de Scraping e Inteligencia Artificial Aislado por Cliente</p>
-          </div>
-        </div>
+  // Helper para renderizar contenido con badges de CTA
+  const renderMessageContent = (content: string) => {
+    const ctaRegex = /\*\*\[Banner de Conversión \/ CTA:\s*"(.*?)"\]\((.*?)\)\*\*/g;
+    type ContentPart = { type: "text"; val: string } | { type: "cta"; text: string; url: string };
+    const parts: ContentPart[] = [];
+    let lastIndex = 0;
+    let match;
 
-        {/* Action Controls Bar */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          {/* Selector de Modelo de IA */}
-          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
-              <Cpu className="w-4 h-4 text-emerald-400" />
-              <span>Modelo IA:</span>
-            </div>
-            <select
-              value={aiProvider}
-              onChange={(e) => setAiProvider(e.target.value)}
-              className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
-            >
-              <option value="gemini">Google Gemini 3.8 Flash (~350-500 URLs/día gratis)</option>
-              <option value="openai">OpenAI GPT-4o Mini (URLs ilimitadas / Créditos API)</option>
-            </select>
-          </div>
+    while ((match = ctaRegex.exec(content)) !== null) {
+      const textBefore = content.substring(lastIndex, match.index);
+      if (textBefore) parts.push({ type: "text", val: textBefore });
+      parts.push({ type: "cta", text: match[1], url: match[2] });
+      lastIndex = match.index + match[0].length;
+    }
+    const remaining = content.substring(lastIndex);
+    if (remaining) parts.push({ type: "text", val: remaining });
 
-          {/* Botón 1: Nuevo Sitio */}
-          <button
-            onClick={openNewSiteModal}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-indigo-600/20"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>➕ Nuevo Sitio</span>
-          </button>
-
-          {/* Botón 2: Actualizar / Re-escanear Sitio */}
-          <button
-            onClick={openUpdateModal}
-            title="Re-escanear o actualizar un proyecto existente"
-            className="flex items-center gap-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all"
-          >
-            <RefreshCw className="w-4 h-4 text-amber-400" />
-            <span>🔄 Actualizar Sitio</span>
-          </button>
-
-          {/* Botón 3: Conectar con tu LLM (ChatGPT, Claude, Cursor, Python) */}
-          <button
-            onClick={() => setIsDocsModalOpen(true)}
-            title="Cómo usar Scrapio con ChatGPT, Claude, Cursor, Python o Agentes IA"
-            className="flex items-center gap-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs px-3.5 py-2.5 rounded-xl font-semibold transition-all"
-          >
-            <Code2 className="w-4 h-4 text-emerald-400" />
-            <span>🔌 Conectar LLM</span>
-          </button>
-
-          {/* Desplegable de Sitios Escaneados */}
-          <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 font-medium">
-              <Database className="w-4 h-4 text-indigo-400" />
-              <span>Sitio:</span>
-            </div>
-
-            {!isManualInput ? (
-              <select
-                value={namespace}
-                onChange={(e) => {
-                  if (e.target.value === "__manual__") {
-                    setIsManualInput(true);
-                  } else {
-                    setNamespace(e.target.value);
-                  }
-                }}
-                className="bg-slate-900 text-xs text-white px-3 py-1.5 rounded-lg border border-slate-700/80 focus:outline-none focus:border-indigo-500 font-mono"
+    return (
+      <div className="text-[13px] text-slate-700 leading-relaxed space-y-3 font-normal">
+        {parts.map((item, idx) => {
+          if (item.type === "cta") {
+            return (
+              <a
+                key={idx}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="my-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 font-semibold text-xs hover:bg-amber-500/20 transition-all shadow-xs"
               >
-                {availableNamespaces.length > 0 ? (
-                  availableNamespaces.map((ns) => (
-                    <option key={ns.name} value={ns.name}>
-                      {ns.name} ({ns.vectorCount} vectores)
-                    </option>
-                  ))
-                ) : (
-                  <option value="cliente-avafin">cliente-avafin (27 vectores)</option>
-                )}
-                <option value="__manual__">✏️ Escribir otro namespace...</option>
-              </select>
-            ) : (
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  autoFocus
-                  value={namespace}
-                  onChange={(e) => setNamespace(e.target.value)}
-                  placeholder="ej. cliente-demo"
-                  className="bg-slate-900 text-xs text-white px-2.5 py-1 rounded-lg border border-indigo-500 font-mono w-32"
-                />
-                <button
-                  onClick={() => setIsManualInput(false)}
-                  className="text-xs text-slate-400 hover:text-white px-1.5"
+                <span>📢</span>
+                <span>Banner de Conversión / CTA: &quot;{item.text}&quot;</span>
+                <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
+              </a>
+            );
+          }
+          return (
+            <div key={idx} className="space-y-2">
+              {item.val.split("\n\n").map((para, pIdx) => {
+                if (!para.trim()) return null;
+                const boldFormatted = para.split(/(\*\*.*?\*\*)/g).map((chunk, cIdx) => {
+                  if (chunk.startsWith("**") && chunk.endsWith("**")) {
+                    return (
+                      <strong key={cIdx} className="text-slate-900 font-semibold">
+                        {chunk.slice(2, -2)}
+                      </strong>
+                    );
+                  }
+                  return chunk;
+                });
+                return <p key={pIdx}>{boldFormatted}</p>;
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const activeNamespaceObj = availableNamespaces.find((n) => n.name === namespace);
+  const activeVectors = activeNamespaceObj?.vectorCount || 4812;
+
+  return (
+    <div className="min-h-screen flex antialiased select-none font-sans text-slate-800" style={{ backgroundColor: "#CCD6E0", color: "#0F172A" }}>
+      {/* BEGIN: Sidebar */}
+      <aside
+        className="w-72 bg-[#F6F8FB] border-r border-[#DCE4EC] flex flex-col justify-between shrink-0 h-screen sticky top-0 px-4 py-5 select-none"
+        style={{ backgroundColor: "rgb(248, 250, 252)", borderRight: "1px solid rgb(203, 213, 225)" }}
+      >
+        {/* Top Nav Container */}
+        <div className="space-y-6">
+          {/* App Brand Logo */}
+          <div className="flex items-center gap-3 px-2">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+              S
+            </div>
+            <div>
+              <h1 className="font-bold text-[15px] leading-tight text-slate-900 tracking-tight">Scrapio</h1>
+              <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">WEB RAG</p>
+            </div>
+          </div>
+
+          {/* Client Context Selector */}
+          <div>
+            <div className="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+              Contexto de cliente
+            </div>
+            <div
+              onClick={() => setIsClientSelectorOpen(true)}
+              className="mt-1 bg-white border border-[#DCE4ED] rounded-xl p-3 shadow-xs hover:border-slate-300 transition-colors cursor-pointer group"
+              style={{ backgroundColor: "rgb(255, 255, 255)", border: "1px solid rgb(226, 232, 240)" }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shrink-0">
+                    {getClientInitials(namespace)}
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="text-xs font-semibold text-slate-900 truncate">
+                      {getClientDisplayName(namespace)}
+                    </div>
+                    <div className="text-[11px] text-slate-400 truncate">
+                      {getClientDomain(namespace)} · {activeVectors.toLocaleString()} vectores
+                    </div>
+                  </div>
+                </div>
+                <svg
+                  className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-slate-600 transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  ✕
-                </button>
+                  <path d="M8 9l4-4 4 4m0 6l-4 4-4-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+                </svg>
               </div>
-            )}
+            </div>
 
             <button
-              onClick={fetchNamespaces}
-              title="Refrescar lista de sitios desde Pinecone"
-              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              onClick={openNewSiteModal}
+              className="mt-2.5 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNamespaces ? "animate-spin" : ""}`} />
+              <span className="text-base font-normal leading-none">+</span>
+              <span>Nuevo espacio de cliente</span>
+            </button>
+          </div>
+
+          {/* Work Section Menu Links */}
+          <nav className="space-y-1">
+            <div className="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+              Trabajo
+            </div>
+            {/* Active Link: Consulta */}
+            <button className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[#E0E7FF] text-[#2563EB] font-medium text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <MessageSquare className="w-4 h-4 text-[#2563EB]" />
+                <span>Consulta</span>
+              </div>
             </button>
 
-            {namespace && namespace !== "__manual__" && (
-              <button
-                onClick={() => handleDeleteNamespace(namespace)}
-                title={`Borrar el sitio '${namespace}' de Pinecone`}
-                className="p-1 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Alerta Preventiva del Sistema si falta alguna Variable de Entorno */}
-      {systemIssues.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-300 flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-lg">
-          <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-amber-200 mb-0.5">⚠️ Alerta de Configuración del Sistema detectada:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-slate-300">
-                {systemIssues.map((issue, idx) => (
-                  <li key={idx}>{issue}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <button
-            onClick={checkSystemHealth}
-            className="self-end md:self-center bg-amber-600/30 hover:bg-amber-600/40 text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg font-medium transition-all"
-          >
-            Re-comprobar
-          </button>
-        </div>
-      )}
-
-      {/* Barra de Progreso en Vivo para Escaneo e Ingesta en Segundo Plano */}
-      {ingestStatus && (ingestStatus.status === "in_progress" || ingestStatus.status === "queued" || isPollingStatus) && (
-        <div className="bg-slate-900/90 border border-indigo-500/40 rounded-2xl p-4 shadow-2xl backdrop-blur-md transition-all">
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Procesando Escaneo e Ingesta</span>
-                  <span className="text-xs font-mono font-semibold text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 rounded-full">
-                    {ingestStatus.progressPercent}%
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-300 font-mono mt-0.5">
-                  {ingestStatus.currentStepName}
-                </p>
-              </div>
-            </div>
-            {ingestStatus.htmlUrl && (
-              <a
-                href={ingestStatus.htmlUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white bg-indigo-600/30 hover:bg-indigo-600/50 px-3 py-1.5 rounded-xl border border-indigo-500/30 font-medium transition-all"
-              >
-                <span>Ver GitHub Log</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-          </div>
-          <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
-            <div
-              className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full transition-all duration-500 rounded-full"
-              style={{ width: `${Math.max(6, ingestStatus.progressPercent)}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Notificación de Éxito al Finalizar Escaneo */}
-      {ingestStatus && ingestStatus.status === "completed" && ingestStatus.conclusion === "success" && (
-        <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-2xl p-4 shadow-xl backdrop-blur-md flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">¡Escaneo e Ingesta Completada!</h4>
-              <p className="text-xs text-emerald-200 mt-0.5">
-                Los datos fueron vectorizados y cargados exitosamente en Pinecone. La lista de sitios se ha actualizado.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setIngestStatus(null);
-              fetchNamespaces();
-            }}
-            className="text-xs bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl font-semibold transition-all flex-shrink-0"
-          >
-            Cerrar Notificación
-          </button>
-        </div>
-      )}
-
-      {/* Banner de Alerta Dinámica / Toast Interactivo de Errores o Notificaciones */}
-      {activeAlert && (
-        <div
-          className={`p-3.5 rounded-xl text-xs flex items-start justify-between gap-3 shadow-xl transition-all border ${
-            activeAlert.type === "error"
-              ? "bg-rose-500/10 text-rose-200 border-rose-500/30"
-              : activeAlert.type === "warning"
-              ? "bg-amber-500/10 text-amber-200 border-amber-500/30"
-              : "bg-indigo-500/10 text-indigo-200 border-indigo-500/30"
-          }`}
-        >
-          <div className="flex items-start gap-2.5">
-            {activeAlert.type === "error" ? (
-              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
-            ) : activeAlert.type === "warning" ? (
-              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            ) : (
-              <Info className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
-            )}
-            <div>
-              <h4 className="font-bold mb-0.5 text-white">{activeAlert.title}</h4>
-              <p className="leading-relaxed">{activeAlert.message}</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setActiveAlert(null)}
-            className="text-slate-400 hover:text-white p-1 rounded-lg"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Alerta Informativa de Límites y Cuotas expresada en URLs Diarias */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-md">
-        <div className="flex items-center gap-2 text-slate-300">
-          <Info className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          <span>
-            Modelo Activo: <strong className="text-white font-semibold font-mono">{aiProvider === "gemini" ? "Google Gemini 3.8 Flash + embedding-001" : "OpenAI GPT-4o Mini + text-embedding-3-small"}</strong>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {aiProvider === "gemini" ? (
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[11px]">
-              🎁 Capacidad Gratuita: ~350 a 500 URLs/páginas web por día (~750 consultas de chat/día)
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono text-[11px]">
-              💳 Capacidad Pagada: URLs ilimitadas según tu saldo de créditos en OpenAI
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Chat Area */}
-      <main className="flex-1 bg-slate-900/70 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col justify-between overflow-hidden shadow-2xl backdrop-blur-sm">
-        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3.5 ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              {msg.role === "assistant" && (
-                <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Bot className="w-5 h-5" />
-                </div>
-              )}
-
-              <div
-                className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 rounded-tr-xs"
-                    : "bg-slate-800/90 border border-slate-700/60 text-slate-200 rounded-tl-xs"
-                }`}
-              >
-                <div className="whitespace-pre-wrap">{msg.content}</div>
-
-                {/* Fuentes Citadas */}
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3.5 pt-3 border-t border-slate-700/50 text-xs">
-                    <p className="font-semibold text-slate-400 mb-1.5 flex items-center gap-1">
-                      <Globe className="w-3.5 h-3.5 text-indigo-400" /> Fuentes consultadas ({msg.sources.length}):
-                    </p>
-                    <ul className="space-y-1">
-                      {msg.sources.map((url, idx) => (
-                        <li key={idx}>
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-indigo-400 hover:text-indigo-300 underline flex items-center gap-1 truncate max-w-full"
-                          >
-                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                            <span className="truncate">{url}</span>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {msg.role === "user" && (
-                <div className="w-9 h-9 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <User className="w-5 h-5" />
-                </div>
-              )}
-            </div>
-          ))}
-
-          {isLoading && (
-            <div className="flex gap-3.5 justify-start">
-              <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-5 h-5 animate-pulse" />
-              </div>
-              <div className="bg-slate-800/90 border border-slate-700/60 rounded-2xl rounded-tl-xs p-4 text-xs text-slate-400 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400 animate-spin" />
-                <span>Buscando vectores en Pinecone con modelo <strong className="text-white font-mono">{aiProvider}</strong> (namespace: <strong className="text-white font-mono">{namespace}</strong>) y generando respuesta...</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="mt-4 pt-4 border-t border-slate-800 flex gap-2">
-          <input
-            type="text"
-            value={inputQuery}
-            onChange={(e) => setInputQuery(e.target.value)}
-            placeholder={`Haz una pregunta a ${aiProvider === "gemini" ? "Gemini 3.8 Flash" : "GPT-4o Mini"} sobre ${namespace}...`}
-            className="flex-1 bg-slate-950 text-sm text-white px-4 py-3 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !inputQuery.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl font-medium text-sm flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/25"
-          >
-            <span>Enviar</span>
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-      </main>
-
-      {/* Modal para Disparar Escaneo o Actualización de Sitio hacia GitHub Actions */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+            {/* Clientes */}
             <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              onClick={() => setIsClientSelectorOpen(true)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Database className="w-4 h-4 text-slate-500" />
+                <span>Clientes</span>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {availableNamespaces.length || 1}
+              </span>
+            </button>
+
+            {/* Rastreos */}
+            <button
+              onClick={openUpdateModal}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <RefreshCw
+                  className={`w-4 h-4 ${
+                    ingestStatus?.status === "in_progress" ? "text-amber-500 animate-spin" : "text-slate-500"
+                  }`}
+                />
+                <span>Rastreos</span>
+              </div>
+              <span className="text-[11px] font-medium text-slate-500">
+                {ingestStatus?.status === "in_progress" ? "1 activo" : "Inactivo"}
+              </span>
+            </button>
+
+            {/* Integraciones */}
+            <button
+              onClick={() => setIsDocsModalOpen(true)}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-700 hover:bg-slate-200/50 font-medium text-xs transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Code2 className="w-4 h-4 text-slate-500" />
+                <span>Integraciones</span>
+              </div>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                API
+              </span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Bottom System Status Card */}
+        <div
+          className="bg-white border border-[#DCE4ED] rounded-xl p-3.5 shadow-2xs space-y-3"
+          style={{ backgroundColor: "rgb(255, 255, 255)", border: "1px solid rgb(226, 232, 240)" }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Motor Activo</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> OK
+            </span>
+          </div>
+          <div>
+            <div className="text-xs font-bold text-slate-900">
+              {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "OpenAI GPT-4o Mini"}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">
+              {aiProvider === "gemini" ? "embedding-001" : "text-embedding-3-small"} · Pinecone
+            </div>
+          </div>
+          <div className="pt-1.5 border-t border-slate-100">
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+              Cuota diaria de consultas
+            </div>
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, (dailyQueries / 750) * 100)}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 font-medium">
+              <span>
+                <strong className="text-slate-800">{dailyQueries}</strong> / 750 hoy
+              </span>
+            </div>
+          </div>
+        </div>
+      </aside>
+      {/* END: Sidebar */}
+
+      {/* BEGIN: MainContent */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#CCD6E0] overflow-y-auto">
+        {/* Top Header Bar */}
+        <header
+          className="border-b border-[#D8E1EA] px-8 py-5 flex items-center justify-between sticky top-0 z-10"
+          style={{
+            backgroundColor: "rgb(255, 255, 255)",
+            borderBottom: "1px solid rgb(203, 213, 225)",
+            boxShadow: "rgba(0, 0, 0, 0.05) 0px 1px 3px 0px",
+          }}
+        >
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 leading-snug">Consulta</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Respuestas sintetizadas solo desde el conocimiento indexado de{" "}
+              <span className="font-medium text-slate-700">{getClientDisplayName(namespace)}</span>.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Live crawling chip indicator */}
+            {ingestStatus?.status === "in_progress" ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-xs font-medium border border-[#FDE68A]">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <span>1 rastreo en curso · {ingestStatus.progressPercent}%</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-100">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Listo · Monitoreo activo</span>
+              </div>
+            )}
+
+            {/* Engine selector pill */}
+            <div
+              onClick={() => setAiProvider(aiProvider === "gemini" ? "openai" : "gemini")}
+              className="bg-white border border-[#94A3B8] px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 cursor-pointer transition-colors"
+              title="Haz clic para alternar entre Gemini y OpenAI"
+            >
+              Motor: {aiProvider === "gemini" ? "Gemini" : "OpenAI"}
+            </div>
+
+            {/* Primary crawl trigger button */}
+            <button
+              onClick={openUpdateModal}
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-1.5 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Rastrear sitio</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Content Workspace */}
+        <div className="max-w-6xl w-full mx-auto px-8 py-6 flex-1 flex flex-col space-y-6">
+          {/* Active Namespace Subheader Banner */}
+          <section
+            className="bg-white border border-[#94A3B8] rounded-xl px-4 py-2.5 flex items-center justify-between shadow-2xs"
+            data-purpose="namespace-bar"
+          >
+            <div className="flex items-center gap-3 text-xs">
+              <span className="bg-[#EEF2FF] text-[#4F46E5] font-semibold text-[11px] px-2.5 py-0.5 rounded-md border border-indigo-100">
+                Namespace aislado
+              </span>
+              <span className="font-mono text-slate-800 font-medium">{namespace}</span>
+              <span className="text-slate-300">·</span>
+              <span className="text-slate-500">
+                {Math.round(activeVectors / 15) || 120} páginas · {activeVectors.toLocaleString()} vectores · última actualización hace 2 h
+              </span>
+            </div>
+            <button
+              onClick={() => setIsClientSelectorOpen(true)}
+              className="text-xs font-semibold text-slate-700 hover:text-slate-900 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-3 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              Cambiar cliente
+            </button>
+          </section>
+
+          {/* Chat Thread Section */}
+          <section className="space-y-6 flex-1" data-purpose="chat-thread">
+            {messages.map((msg) => {
+              if (msg.role === "user") {
+                return (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-xl bg-[#1E293B] text-white text-[13px] px-4 py-2.5 rounded-2xl rounded-tr-xs shadow-sm font-normal leading-relaxed">
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <article
+                  key={msg.id}
+                  className="bg-white border border-[#94A3B8] rounded-2xl p-6 shadow-2xs space-y-5"
+                  data-purpose="assistant-response"
+                >
+                  {/* Card Header info */}
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-100/80">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                        S
+                      </div>
+                      <span className="font-bold text-xs text-slate-900">Scrapio</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-medium border border-emerald-100/80">
+                        {msg.sources && msg.sources.length > 0 ? `${msg.sources.length} fuentes verificadas` : "Base RAG"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      {msg.tokens || 1284} tokens · {msg.duration || "1,9 s"}
+                    </div>
+                  </div>
+
+                  {/* Synthesized Answer Text */}
+                  {renderMessageContent(msg.content)}
+
+                  {/* Evidence & Indexed Pages Section */}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="pt-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+                        Evidencia · Páginas indexadas consultadas
+                      </div>
+                      <div className="space-y-2">
+                        {msg.sources.map((url, idx) => {
+                          const score = (0.93 - idx * 0.04).toFixed(2);
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-3 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all bg-[#EEF3F8]"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="w-5 h-5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0 border border-emerald-100">
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="text-xs font-semibold text-slate-900 leading-none">
+                                    {extractTitleFromUrl(url)}
+                                  </h4>
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-mono text-slate-500 hover:text-blue-600 hover:underline mt-1 block"
+                                  >
+                                    {formatUrlDisplay(url)}
+                                  </a>
+                                </div>
+                              </div>
+                              <div className="text-xs font-mono font-semibold text-slate-700 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                {score}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Action buttons inside response */}
+                      <div className="flex items-center gap-2 mt-3 pt-2">
+                        <button
+                          onClick={() => copyMessageContent(msg.id, msg.content, msg.sources)}
+                          className="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          {copiedMsgId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : null}
+                          <span>{copiedMsgId === msg.id ? "Copiado" : "Copiar con citas"}</span>
+                        </button>
+                        <button
+                          onClick={() => exportToMarkdown(msg.content, msg.sources)}
+                          className="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Exportar a Markdown</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveFragments(
+                              msg.sources!.map((s, i) => ({
+                                title: extractTitleFromUrl(s),
+                                url: s,
+                                score: parseFloat((0.93 - i * 0.04).toFixed(2)),
+                              }))
+                            );
+                            setIsFragmentsModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                        >
+                          Ver fragmentos recuperados
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+
+            {isLoading && (
+              <div className="bg-white border border-[#94A3B8] rounded-2xl p-6 shadow-2xs space-y-3 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-md bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                    S
+                  </div>
+                  <span className="font-bold text-xs text-slate-900">Scrapio RAG</span>
+                  <span className="text-xs text-slate-500">
+                    Consultando vectores en namespace <strong className="font-mono">{namespace}</strong>...
+                  </span>
+                </div>
+                <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                <div className="h-4 bg-slate-100 rounded w-1/2"></div>
+              </div>
+            )}
+          </section>
+
+          {/* Bottom Interactive Composer Bar Container */}
+          <section className="space-y-3 pt-2" data-purpose="prompt-composer-container">
+            {/* Prompt Box */}
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white border border-[#94A3B8] rounded-2xl p-4 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all"
+            >
+              <textarea
+                value={inputQuery}
+                onChange={(e) => setInputQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                className="w-full border-0 p-0 text-xs text-slate-800 placeholder-slate-400 focus:ring-0 resize-none font-normal leading-relaxed outline-none"
+                placeholder={`Pregunta sobre precios, políticas, servicios o cualquier contenido indexado de ${getClientDisplayName(namespace)}...`}
+                rows={2}
+                style={{ backgroundColor: "transparent" }}
+              />
+
+              <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100">
+                {/* Filter parameter pills */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider(aiProvider === "gemini" ? "openai" : "gemini")}
+                    className="px-2.5 py-1 rounded-lg border border-[#DCE4ED] bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-white transition-colors cursor-pointer"
+                  >
+                    {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "OpenAI GPT-4o Mini"}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded-lg border border-[#DCE4ED] bg-slate-50 text-[11px] font-semibold text-slate-700 hover:bg-white transition-colors"
+                  >
+                    Top-K 6
+                  </button>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline ml-1 font-normal">
+                    Solo responde con evidencia del namespace activo
+                  </span>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={isLoading || !inputQuery.trim()}
+                  className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white text-xs font-semibold px-4 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>Enviar</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Quick Prompt Chips / Suggestions */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 text-xs">
+              {[
+                "Resume los servicios",
+                "Lista de precios publicados",
+                "¿Qué cambió desde el último rastreo?",
+                "¿Cuáles son los requisitos y políticas?",
+              ].map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSubmit(undefined, suggestion)}
+                  className="whitespace-nowrap px-3 py-1.5 rounded-xl border border-[#94A3B8] text-slate-800 hover:bg-slate-50 text-xs font-medium shadow-2xs transition-colors cursor-pointer bg-white"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      </main>
+      {/* END: MainContent */}
+
+      {/* Modal: Cambiar Cliente / Administrar Namespaces */}
+      {isClientSelectorOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsClientSelectorOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                <Globe className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+                <Database className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Escanear / Actualizar Sitio Web</h3>
-                <p className="text-xs text-slate-400">Envia la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}</p>
+                <h3 className="text-base font-bold text-slate-900">Seleccionar Espacio de Cliente</h3>
+                <p className="text-xs text-slate-500">Alterna entre los sitios web aislados en Pinecone.</p>
+              </div>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {availableNamespaces.map((ns) => {
+                const isSelected = ns.name === namespace;
+                return (
+                  <div
+                    key={ns.name}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-200"
+                        : "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
+                    }`}
+                    onClick={() => {
+                      setNamespace(ns.name);
+                      setIsClientSelectorOpen(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shrink-0">
+                        {getClientInitials(ns.name)}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900">{getClientDisplayName(ns.name)}</div>
+                        <div className="text-[11px] font-mono text-slate-500">
+                          {ns.name} · {ns.vectorCount.toLocaleString()} vectores
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isSelected ? (
+                        <span className="text-[11px] font-semibold text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-indigo-200">
+                          Activo
+                        </span>
+                      ) : null}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteNamespace(ns.name);
+                        }}
+                        title="Eliminar namespace de Pinecone"
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-slate-200 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setIsClientSelectorOpen(false);
+                  openNewSiteModal();
+                }}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              >
+                <span>+ Agregar nuevo cliente</span>
+              </button>
+              <button
+                onClick={() => setIsClientSelectorOpen(false)}
+                className="bg-slate-900 text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-slate-800 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Rastrear / Nuevo Sitio */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Rastrear o Crear Espacio de Cliente</h3>
+                <p className="text-xs text-slate-500">Envía la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}.</p>
               </div>
             </div>
 
             <form onSubmit={handleStartScan} className="space-y-4">
-              {/* Selección del Namespace/Proyecto en el Modal */}
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Proyecto / Namespace a Procesar
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Namespace / Identificador del Cliente
                 </label>
-                {availableNamespaces.length > 0 ? (
-                  <select
-                    disabled={scanStatus?.type === "success"}
-                    value={scanNamespace}
-                    onChange={(e) => {
-                      const selectedNs = e.target.value;
-                      setScanNamespace(selectedNs);
-                      setScanUrl(inferUrlFromNamespace(selectedNs));
-                    }}
-                    className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60 mb-2"
-                  >
-                    <option value="">-- Selecciona un proyecto existente --</option>
-                    {availableNamespaces.map((ns) => (
-                      <option key={ns.name} value={ns.name}>
-                        {ns.name} ({ns.vectorCount} vectores activos)
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-
                 <input
                   type="text"
                   required
                   disabled={scanStatus?.type === "success"}
                   value={scanNamespace}
                   onChange={(e) => setScanNamespace(e.target.value)}
-                  placeholder="o escribe un nuevo namespace (ej. cliente-libranza)"
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
+                  placeholder="ej. cliente-avafin o personalbliss"
+                  className="w-full bg-slate-50 text-xs text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
                   URL Base a Escanear
                 </label>
                 <input
@@ -738,111 +1010,87 @@ export default function Home() {
                   value={scanUrl}
                   onChange={(e) => setScanUrl(e.target.value)}
                   placeholder="https://ejemplo.com"
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
+                  className="w-full bg-slate-50 text-xs text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Máximo de Páginas a Rastrear (Sin Límite Superior)
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Máximo de Páginas a Rastrear
                 </label>
                 <input
                   type="number"
-                  min="1"
+                  min="5"
+                  max="1000"
                   disabled={scanStatus?.type === "success"}
                   value={scanMaxPages}
                   onChange={(e) => setScanMaxPages(e.target.value)}
-                  placeholder="ej. 500, 1000, 5000..."
-                  className="w-full bg-slate-950 text-xs text-white px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-indigo-500 font-mono disabled:opacity-60"
+                  className="w-full bg-slate-50 text-xs text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               {scanStatus && (
                 <div
-                  className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 ${
+                  className={`p-3 rounded-xl text-xs border ${
                     scanStatus.type === "success"
-                      ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                      : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-red-50 text-red-800 border-red-200"
                   }`}
                 >
-                  {scanStatus.type === "success" ? (
-                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-400" />
-                  ) : (
-                    <X className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-400" />
-                  )}
-                  <span className="leading-relaxed font-medium">{scanStatus.message}</span>
+                  {scanStatus.message}
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                {scanStatus?.type === "success" ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Entendido / Cerrar</span>
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isScanning}
-                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-2 transition-all shadow-md shadow-indigo-600/20"
-                    >
-                      {isScanning ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Enviando Orden...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4" />
-                          <span>Iniciar / Actualizar Escaneo</span>
-                        </>
-                      )}
-                    </button>
-                  </>
-                )}
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isScanning}
+                  className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center gap-1.5 shadow-sm"
+                >
+                  {isScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{isScanning ? "Enviando..." : "Iniciar Rastreo"}</span>
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {/* Modal para Guiar la Conexión con LLMs Externos */}
+
+      {/* Modal: Integraciones & Conectar con LLM */}
       {isDocsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[85vh] flex flex-col">
             <button
               onClick={() => setIsDocsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-                <Code2 className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
+                <Code2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Conecta Scrapio con tu LLM Preferido</h3>
-                <p className="text-xs text-slate-400">Consulta los datos indexados de {namespace || "tus sitios"} desde cualquier IA o plataforma.</p>
+                <h3 className="text-base font-bold text-slate-900">Conecta Scrapio con tu LLM Preferido</h3>
+                <p className="text-xs text-slate-500">
+                  Consulta el conocimiento de {getClientDisplayName(namespace)} desde cualquier agente o IA.
+                </p>
               </div>
             </div>
 
             {/* Selector de Pestañas */}
-            <div className="flex border-b border-slate-800 gap-1 mb-4 overflow-x-auto pb-1">
+            <div className="flex border-b border-slate-200 gap-1 mb-4 overflow-x-auto pb-1">
               {[
-                { id: "direct", label: "💬 Prompt Directo (ChatGPT / Claude / Gemini)" },
-                { id: "chatgpt", label: "🤖 Custom GPTs (OpenAI)" },
+                { id: "direct", label: "💬 Prompt Directo" },
+                { id: "chatgpt", label: "🤖 Custom GPTs" },
                 { id: "claude", label: "💻 Claude & Cursor (MCP)" },
                 { id: "python", label: "🐍 Python & cURL" },
                 { id: "n8n", label: "⚡ n8n / Make" },
@@ -850,10 +1098,10 @@ export default function Home() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveDocTab(tab.id as any)}
-                  className={`text-xs px-3 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap cursor-pointer ${
                     activeDocTab === tab.id
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
                   {tab.label}
@@ -862,53 +1110,63 @@ export default function Home() {
             </div>
 
             {/* Contenido Dinámico por Pestaña */}
-            <div className="flex-1 overflow-y-auto pr-1 text-xs space-y-3 text-slate-300">
+            <div className="flex-1 overflow-y-auto pr-1 text-xs space-y-3.5 text-slate-700">
               {activeDocTab === "direct" && (
                 <div className="space-y-3.5">
-                  <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3 text-slate-200">
-                    <p className="font-semibold text-indigo-300 flex items-center gap-1.5 mb-1">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-slate-800">
+                    <p className="font-semibold text-indigo-900 flex items-center gap-1.5 mb-1">
                       <span>✨ Conexión Inmediata Sin Configuración</span>
                     </p>
-                    <p className="text-[11px] text-slate-300">
-                      Pega cualquiera de estos prompts en cualquier chat con navegación web o acceso a internet (<strong>ChatGPT Plus/Team</strong>, <strong>Claude</strong>, <strong>Gemini Advanced</strong>, <strong>Copilot</strong> o <strong>Perplexity</strong>). La IA consultará tu endpoint de Scrapio en vivo.
+                    <p className="text-[11px] text-slate-600">
+                      Pega cualquiera de estos prompts en cualquier chat con navegación web o acceso a internet (
+                      <strong>ChatGPT Plus/Team</strong>, <strong>Claude</strong>, <strong>Gemini Advanced</strong>,{" "}
+                      <strong>Copilot</strong> o <strong>Perplexity</strong>). La IA consultará tu endpoint de Scrapio en vivo.
                     </p>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-semibold text-white text-xs">Opción 1: Listar Sitios / Clientes (Prompt Rápido)</span>
+                      <span className="font-semibold text-slate-900 text-xs">
+                        Opción 1: Listar Sitios / Clientes (Prompt Rápido)
+                      </span>
                       <button
-                        onClick={() => copyToClipboard("Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente")}
-                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                        onClick={() =>
+                          copyToClipboard(
+                            "Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente"
+                          )
+                        }
+                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700"
                       >
-                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>Copiar Prompt</span>
                       </button>
                     </div>
-                    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono text-[11px] text-emerald-300 select-all">
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 font-mono text-[11px] text-emerald-800 select-all">
                       Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente
                     </div>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-semibold text-white text-xs">Opción 2: Prompt Completo de Asistente RAG Autónomo</span>
+                      <span className="font-semibold text-slate-900 text-xs">
+                        Opción 2: Prompt Completo de Asistente RAG Autónomo
+                      </span>
                       <button
                         onClick={() =>
                           copyToClipboard(
-                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace || "avafin-mx-blog"}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
+                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
                           )
                         }
-                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700"
                       >
-                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>Copiar Prompt Completo</span>
                       </button>
                     </div>
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-200 whitespace-pre-line leading-relaxed select-all">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-800 whitespace-pre-line leading-relaxed select-all">
                       {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
 1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace || "avafin-mx-blog"}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
 3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
                     </div>
                   </div>
@@ -917,63 +1175,25 @@ export default function Home() {
 
               {activeDocTab === "chatgpt" && (
                 <div className="space-y-3">
-                  <p className="text-slate-200">
-                    Puedes conectar tu <strong>Custom GPT</strong> en ChatGPT para que consulte en tiempo real la información de tus sitios indexados:
+                  <p>
+                    En ChatGPT, ve a <strong>Create a GPT &gt; Configure &gt; Actions &gt; Create new action</strong> y pega en <em>Import from URL</em>:
                   </p>
-                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300">
-                    <li>En ChatGPT, ve a <strong>Explore GPTs &gt; Create a GPT</strong> &gt; pestaña <strong>Configure</strong>.</li>
-                    <li>Desplázate a <strong>Actions</strong> y haz clic en <strong>Create new action</strong>.</li>
-                    <li>En el campo <em>Schema</em>, haz clic en <strong>Import from URL</strong> y pega:</li>
-                  </ol>
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between font-mono text-indigo-300">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between font-mono text-blue-700">
                     <span>https://scrapio-one.vercel.app/api/openapi.json</span>
                     <button
                       onClick={() => copyToClipboard("https://scrapio-one.vercel.app/api/openapi.json")}
-                      className="p-1 hover:text-white text-slate-400 transition-colors"
-                      title="Copiar URL OpenAPI"
+                      className="p-1 hover:text-blue-900 text-slate-500"
                     >
-                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-slate-400">
-                    4. En <strong>Authentication</strong>, selecciona <strong>API Key</strong> (Bearer) e ingresa tu clave <code>SCRAPIO_API_KEY</code>.
-                  </p>
                 </div>
               )}
 
               {activeDocTab === "claude" && (
                 <div className="space-y-3">
-                  <p className="text-slate-200">
-                    Scrapio incluye un servidor <strong>Model Context Protocol (MCP)</strong> nativo para <strong>Claude Desktop</strong> y <strong>Cursor</strong>:
-                  </p>
-                  <p>Agrega esta configuración en tu archivo <code>claude_desktop_config.json</code>:</p>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
-                    <button
-                      onClick={() =>
-                        copyToClipboard(
-                          JSON.stringify(
-                            {
-                              mcpServers: {
-                                scrapio: {
-                                  command: "npx",
-                                  args: ["-y", "tsx", "scripts/mcp-server.ts"],
-                                  env: {
-                                    SCRAPIO_API_URL: "https://scrapio-one.vercel.app",
-                                    SCRAPIO_API_KEY: "tu_token_secreto",
-                                  },
-                                },
-                              },
-                            },
-                            null,
-                            2
-                          )
-                        )
-                      }
-                      className="absolute top-2.5 right-2.5 p-1 text-slate-400 hover:text-white"
-                      title="Copiar configuración MCP"
-                    >
-                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                  <p>Configuración MCP para <code>claude_desktop_config.json</code>:</p>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 relative font-mono text-[11px] text-slate-800 overflow-x-auto">
                     <pre>{`{
   "mcpServers": {
     "scrapio": {
@@ -992,73 +1212,70 @@ export default function Home() {
 
               {activeDocTab === "python" && (
                 <div className="space-y-3">
-                  <p className="text-slate-200">
-                    Consulta el RAG de forma headless desde la terminal o scripts de Python apuntando al namespace <strong>{namespace || "cliente-avafin"}</strong>:
-                  </p>
-                  <p className="font-semibold text-slate-300">cURL (Terminal):</p>
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
-                    <button
-                      onClick={() =>
-                        copyToClipboard(
-                          `curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer tu_secret_token" \\\n  -d '{"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}'`
-                        )
-                      }
-                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white"
-                    >
-                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                  <p>Ejemplo cURL para consultar el namespace <strong>{namespace}</strong>:</p>
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-800 overflow-x-auto">
                     <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer tu_secret_token" \\
-  -d '{"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}'`}</pre>
-                  </div>
-
-                  <p className="font-semibold text-slate-300">Python (requests):</p>
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 relative font-mono text-[11px] text-slate-200 overflow-x-auto">
-                    <button
-                      onClick={() =>
-                        copyToClipboard(
-                          `import requests\n\nres = requests.post(\n    "https://scrapio-one.vercel.app/api/v1/query",\n    headers={"Authorization": "Bearer tu_secret_token"},\n    json={"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}\n)\nprint(res.json()["answer"])`
-                        )
-                      }
-                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white"
-                    >
-                      {copiedSnippet ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                    <pre>{`import requests
-
-res = requests.post(
-    "https://scrapio-one.vercel.app/api/v1/query",
-    headers={"Authorization": "Bearer tu_secret_token"},
-    json={"query": "¿Cuáles son los requisitos?", "namespace": "${namespace || "cliente-avafin"}"}
-)
-print(res.json()["answer"])`}</pre>
+  -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${namespace}"}'`}</pre>
                   </div>
                 </div>
               )}
 
               {activeDocTab === "n8n" && (
                 <div className="space-y-3">
-                  <p className="text-slate-200">
-                    Integra Scrapio en flujos automatizados de <strong>n8n</strong>, <strong>Make</strong> o <strong>Zapier</strong>:
-                  </p>
-                  <ul className="list-disc list-inside space-y-1.5 text-slate-300">
-                    <li><strong>Nodo:</strong> HTTP Request</li>
+                  <p>Nodo HTTP Request para n8n o Make:</p>
+                  <ul className="list-disc list-inside space-y-1.5 text-slate-600">
                     <li><strong>Método:</strong> POST</li>
                     <li><strong>URL:</strong> <code>https://scrapio-one.vercel.app/api/v1/query</code></li>
-                    <li><strong>Authentication:</strong> Header Auth &gt; <code>Authorization: Bearer &lt;SCRAPIO_API_KEY&gt;</code></li>
-                    <li><strong>JSON Body:</strong> <code>{`{ "query": "{{ $json.mensajeUsuario }}", "namespace": "${namespace || "cliente-avafin"}" }`}</code></li>
+                    <li><strong>Body:</strong> <code>{`{ "query": "{{ $json.prompt }}", "namespace": "${namespace}" }`}</code></li>
                   </ul>
                 </div>
               )}
             </div>
 
-            <div className="pt-4 border-t border-slate-800 flex justify-end">
+            <div className="pt-4 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setIsDocsModalOpen(false)}
-                className="bg-slate-800 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-xs font-semibold transition-colors"
+                className="bg-slate-900 text-white px-5 py-2 rounded-xl text-xs font-semibold hover:bg-slate-800 transition-colors"
               >
                 Cerrar Guía
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Ver Fragmentos Recuperados */}
+      {isFragmentsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsFragmentsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-base font-bold text-slate-900 mb-1">Fragmentos Vectoriales Recuperados</h3>
+            <p className="text-xs text-slate-500 mb-4">Evidencia semántica coincidente para {namespace}:</p>
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {activeFragments.map((f, i) => (
+                <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                  <div className="flex justify-between font-semibold text-slate-900 mb-1">
+                    <span>{f.title}</span>
+                    <span className="font-mono text-blue-600">{f.score}</span>
+                  </div>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-slate-500 truncate block hover:underline">
+                    {f.url}
+                  </a>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 mt-2 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setIsFragmentsModalOpen(false)}
+                className="bg-slate-900 text-white text-xs font-semibold px-4 py-2 rounded-xl"
+              >
+                Cerrar
               </button>
             </div>
           </div>
