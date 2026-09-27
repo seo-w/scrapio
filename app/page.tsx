@@ -24,7 +24,7 @@ export default function Home() {
     {
       id: "1",
       role: "assistant",
-      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar un sitio web de la lista de escaneados, actualizar sus datos o presionar 'Escanear Nuevo Sitio' para agregar un nuevo cliente.",
+      content: "¡Hola, Wilman! Soy Scrapio RAG. Puedes seleccionar un sitio web de la lista de escaneados, actualizar sus datos o presionar 'Nuevo Sitio' para agregar un nuevo cliente.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,7 +145,6 @@ export default function Home() {
       setNamespace(scanNamespace.trim());
       setIsManualInput(false);
 
-      // Refrescar la lista de sitios escaneados después de unos segundos
       setTimeout(() => {
         fetchNamespaces();
       }, 5000);
@@ -159,9 +158,15 @@ export default function Home() {
     }
   };
 
+  // Abrir modal preparado para re-escanear/actualizar el sitio actual con auto-relleno inteligente de URL
   const openUpdateModal = () => {
     setScanNamespace(namespace);
-    setScanUrl("");
+    // Infección/Auto-relleno inteligente de la URL
+    if (namespace.toLowerCase().includes("avafin")) {
+      setScanUrl("https://www.avafin.mx");
+    } else {
+      setScanUrl(`https://www.${namespace.replace(/^cliente-/, "")}.com`);
+    }
     setScanStatus(null);
     setIsModalOpen(true);
   };
@@ -189,7 +194,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Control Bar: Botones y Desplegable */}
+        {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <button
             onClick={openNewSiteModal}
@@ -445,7 +450,6 @@ export default function Home() {
 
               <div className="flex justify-end gap-2 pt-2">
                 {scanStatus?.type === "success" ? (
-                  /* Cuando la orden fue exitosa, desaparece el botón de enviar y se muestra un botón limpio de Entendido */
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
