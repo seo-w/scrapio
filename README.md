@@ -98,7 +98,47 @@ GITHUB_REPO_NAME=scrapio
 
 # ScraperAPI Key (Opcional - para rotación de IPs residenciales)
 SCRAPER_API_KEY=tu_scraper_api_key_opcional
+
+# Clerk Authentication (https://clerk.com)
+# En Vercel guardar como Tipo "Config":
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+
+# En Vercel guardar como Tipo "Secret":
+CLERK_SECRET_KEY=sk_test_...
+
+# Correo del Administrador principal
+ADMIN_EMAIL=avraxas@gmail.com
 ```
+
+---
+
+## 🔐 Autenticación & Control de Acceso (Clerk & RBAC)
+
+Scrapio implementa autenticación moderna y control de acceso basado en roles mediante **Clerk**:
+
+### 1. Rol de Administrador (`avraxas@gmail.com`)
+* **Detección automática**: El correo configurado en `ADMIN_EMAIL` adquiere privilegios de Administrador automáticamente al iniciar sesión.
+* **Visibilidad global**: Ve todos los proyectos (namespaces) existentes en Pinecone.
+* **Panel de Administración**: Botón exclusivo **"Gestión Usuarios"** para:
+  * Ver todos los usuarios registrados.
+  * Asignar qué proyectos puede ver cada usuario (soporta compartir un mismo proyecto entre múltiples cuentas).
+  * Activar o desactivar el acceso al modelo OpenAI (GPT-4o Mini) por usuario.
+  * Eliminar cuentas de usuario de Clerk.
+* **Acceso completo**: Libre alternancia entre Gemini 3.8 Flash y OpenAI GPT-4o Mini.
+
+### 2. Rol de Usuario Regular
+* **Aislamiento de proyectos**: Solo puede ver y consultar los namespaces que el administrador le haya asignado con checkboxes.
+* **Modelo por defecto**: Dispone de **Gemini 3.8 Flash** activo de forma predeterminada sin costo adicional.
+* **Protección de saldo**: El modelo OpenAI GPT-4o Mini permanece bloqueado con candado `🔒` salvo que el administrador lo autorice o el usuario use su propia API Key (BYOK).
+
+### 3. Soporte BYOK (Bring Your Own Key)
+* En la barra lateral y en el compositor, cualquier usuario puede pulsar **"Mis API Keys (BYOK)"**.
+* Permite guardar claves personales de Gemini o OpenAI en el almacenamiento local de su navegador.
+* Al ingresar una clave personal de OpenAI, el modelo **GPT-4o Mini se desbloquea inmediatamente**, facturando las consultas a la cuenta del propio usuario.
 
 ---
 
@@ -123,59 +163,42 @@ npm run mcp
 ## 📡 Documentación Completa de APIs (Endpoints)
 
 ### 1. Endpoint RAG para Interfaz Web (`POST /api/chat`)
+* Valida sesión de Clerk y verifica que el usuario tenga permiso sobre el namespace solicitado.
+* Soporta parámetro opcional `customApiKey` para BYOK.
 * **Body:**
   ```json
   {
     "query": "¿Cuáles son los requisitos para un préstamo?",
     "namespace": "cliente-avafin",
-    "aiProvider": "gemini"
-  }
-  ```
-* **Respuesta Exitosa:**
-  ```json
-  {
-    "answer": "Para solicitar un préstamo se requiere...",
-    "sources": ["https://avafin.mx/requisitos"],
-    "matchesCount": 8,
-    "providerUsed": "gemini"
+    "aiProvider": "gemini",
+    "customApiKey": "opcional_si_es_byok"
   }
   ```
 
-### 2. Endpoint Headless con Autenticación Bearer (`POST /api/v1/query`)
+### 2. Panel Admin de Usuarios (`GET / PATCH / DELETE /api/admin/users`)
+* **`GET`**: Retorna el listado de usuarios de Clerk con sus metadatos y proyectos asignados (exclusivo admin).
+* **`PATCH`**: Actualiza los proyectos permitidos (`allowed_namespaces`) y el permiso de OpenAI (`can_use_openai`) de un usuario.
+* **`DELETE ?userId=...`**: Elimina a un usuario de Clerk.
+
+### 3. Perfil de Usuario (`GET /api/me`)
+* Devuelve el rol del usuario actual, su correo, nombre y lista de proyectos autorizados.
+
+### 4. Auditoría de URLs (`GET /api/urls?namespace=...`)
+* Compara en tiempo real las URLs vectorizadas en Pinecone contra las URLs descubiertas en el sitemap XML.
+
+### 5. Endpoint Headless con Autenticación Bearer (`POST /api/v1/query`)
 * **Headers:** `Authorization: Bearer <SCRAPIO_API_KEY>`
-* **Body:**
-  ```json
-  {
-    "query": "¿Qué servicios ofrecen?",
-    "namespace": "cliente-avafin",
-    "aiProvider": "openai"
-  }
-  ```
+* Ideal para conectar agentes de IA externos, n8n, Make y Claude Desktop sin requerir sesión de usuario interactiva.
 
-### 3. Disparo de Ingesta a GitHub Actions (`POST /api/ingest`)
-* **Body:**
-  ```json
-  {
-    "targetUrl": "https://midominio.com",
-    "clientNamespace": "cliente-midominio",
-    "maxPages": 100,
-    "aiProvider": "gemini"
-  }
-  ```
+### 6. Disparo de Ingesta a GitHub Actions (`POST /api/ingest`)
+* Inicia la extracción y vectorización automatizada en la nube vía GitHub REST API.
 
-### 4. Estado y Progreso de Ingesta en Tiempo Real (`GET /api/ingest/status`)
+### 7. Estado y Progreso de Ingesta en Tiempo Real (`GET /api/ingest/status`)
 * Consulta a GitHub Actions y devuelve el porcentaje ($0\%-100\%$), paso actual (`currentStepName`), estado (`queued`, `in_progress`, `completed`) y enlace al log.
 
-### 5. Gestión de Namespaces (`/api/namespaces`)
-* **`GET /api/namespaces`**: Devuelve la lista de sitios indexados con su conteo de vectores.
-* **`DELETE /api/namespaces?namespace=cliente-demo`**: Elimina de forma inmediata todos los vectores asociados a ese namespace en Pinecone.
-
-### 6. Extracción de Entidades SEO (`GET / POST /api/entities`)
-* **`GET /api/entities?namespace=cliente-avafin&aiProvider=gemini`**
-* Analiza el corpus vectorial del sitio y extrae las principales entidades de marca, productos, servicios, audiencias y conceptos SEO clave.
-
-### 7. Especificación OpenAPI (`GET /api/openapi.json`)
-* Devuelve el esquema JSON compatible con OpenAPI 3.0 para conectar Scrapio con GPTs de OpenAI, Swagger UI o plataformas no-code.
+### 8. Gestión de Namespaces (`GET / DELETE /api/namespaces`)
+* Filtra la lista según los permisos del usuario logueado.
+* La eliminación (`DELETE`) está protegida exclusivamente para administradores.
 
 ---
 
@@ -201,22 +224,27 @@ Scrapio incluye un servidor **Model Context Protocol** en [scripts/mcp-server.ts
 
 ---
 
-## 🤖 Ingesta Automatizada en GitHub Actions
-
-En tu repositorio de GitHub (**Settings > Secrets and variables > Actions**), configura:
-1. `GEMINI_API_KEY`
-2. `OPENAI_API_KEY` (opcional)
-3. `PINECONE_API_KEY`
-4. `PINECONE_INDEX_NAME`
-5. `SCRAPER_API_KEY` (opcional)
-
----
-
 ## 🌐 Despliegue en Vercel
 
 1. Sube tu código a GitHub (`main`).
 2. Conecta el repositorio en Vercel.
-3. Agrega las variables de entorno en Vercel (`GEMINI_API_KEY`, `OPENAI_API_KEY`, `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`, `SCRAPIO_API_KEY`, `GITHUB_TOKEN`, `GITHUB_REPO_OWNER`, `GITHUB_REPO_NAME`).
+3. En **Settings > Environment Variables**:
+   * Variables de tipo **Config**:
+     * `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+     * `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (`/sign-in`)
+     * `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (`/sign-up`)
+     * `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` (`/`)
+     * `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` (`/`)
+     * `ADMIN_EMAIL` (`avraxas@gmail.com`)
+     * `PINECONE_INDEX_NAME` (`scrapio`)
+     * `AI_PROVIDER` (`gemini`)
+   * Variables de tipo **Secret**:
+     * `CLERK_SECRET_KEY`
+     * `GEMINI_API_KEY`
+     * `PINECONE_API_KEY`
+     * `OPENAI_API_KEY` (opcional)
+     * `SCRAPIO_API_KEY`
+     * `GITHUB_TOKEN`
 4. Despliega y listo.
 
 ---
@@ -227,22 +255,27 @@ En tu repositorio de GitHub (**Settings > Secrets and variables > Actions**), co
 scrapio/
 ├── .agents/skills/              # Skills de Antigravity (ponytail, ponytail-review, ponytail-audit)
 ├── .github/workflows/ingesta.yml # Workflow de GitHub Actions para scraping e ingesta
+├── middleware.ts                # Protección de rutas con Clerk
 ├── app/
+│   ├── sign-in/                 # Pantalla de inicio de sesión de Clerk
+│   ├── sign-up/                 # Pantalla de registro de usuarios de Clerk
 │   ├── api/
-│   │   ├── chat/route.ts        # RAG query para la UI web
+│   │   ├── admin/users/route.ts # Panel administrativo: gestión de roles y proyectos
+│   │   ├── me/route.ts          # Perfil y permisos del usuario actual
+│   │   ├── urls/route.ts        # Auditoría de URLs escaneadas vs pendientes
+│   │   ├── chat/route.ts        # RAG query web con verificación de permisos y BYOK
 │   │   ├── entities/route.ts    # Extractor de entidades SEO semánticas
 │   │   ├── health/route.ts      # Diagnóstico de variables y estado de Pinecone
-│   │   ├── ingest/
-│   │   │   ├── route.ts         # Disparo de GitHub Actions vía REST API
-│   │   │   └── status/route.ts  # Estado y porcentaje de la barra de progreso
-│   │   ├── namespaces/route.ts  # Consulta (GET) y eliminación (DELETE) de namespaces
+│   │   ├── ingest/              # Disparo y seguimiento de GitHub Actions
+│   │   ├── namespaces/route.ts  # Listado filtrado por usuario y borrado seguro
 │   │   ├── openapi.json/route.ts# Especificación OpenAPI 3.0
 │   │   └── v1/query/route.ts    # API Headless con autenticación Bearer
 │   ├── globals.css              # Estilos Tailwind CSS
-│   ├── layout.tsx               # Layout principal
-│   └── page.tsx                 # UI interactiva con barra de progreso y selector de modelos
+│   ├── layout.tsx               # Layout principal con ClerkProvider
+│   └── page.tsx                 # UI interactiva con RBAC, BYOK y selector de modelos
 ├── lib/
-│   ├── ai.ts                    # Adaptador dual Gemini / OpenAI (Embeddings 768d + LLMs)
+│   ├── auth.ts                  # Helper de autenticación y roles de Clerk
+│   ├── ai.ts                    # Adaptador dual Gemini / OpenAI (Embeddings 768d + LLMs) con BYOK
 │   ├── crawler.ts               # Crawler multi-página con Jitter, User-Agent pool y sitemaps
 │   └── pinecone.ts              # Cliente y operaciones aisladas en Pinecone
 ├── scripts/
@@ -251,3 +284,4 @@ scrapio/
 ├── .env.example                 # Plantilla completa de variables de entorno
 └── README.md                    # Documentación técnica completa y guía de replicación
 ```
+
