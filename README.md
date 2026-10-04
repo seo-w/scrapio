@@ -23,12 +23,15 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 * **Soporte de Doble Proveedor de IA**:
   * **Google Gemini**: `gemini-embedding-001` (768d) + `gemini-3.8-flash`.
   * **OpenAI**: `text-embedding-3-small` (dimensiones: 768) + `gpt-4o-mini`.
-* **Crawler Web Avanzado & Anti-Bloqueos**:
-  * Parseo recursivo de sitemaps (`sitemap.xml` e índices `sitemap_index.xml`).
-  * **Pool de User-Agents Reales** (Chrome, Firefox, Safari) y cabeceras HTTP/2.
-  * **Jitter Aleatorio (350ms - 750ms)** que simula navegación humana.
-  * Soporte opcional de proxies residenciales rotativos vía **ScraperAPI**.
-  * Detección y autorregulación de errores **HTTP 429**: pausa de 3.5s y reintento automático.
+* **Crawler Web de Alto Sigilo & Anti-Bloqueos (Stealth Engine)**:
+  * Parseo recursivo de sitemaps (`sitemap.xml` e índices `sitemap_index.xml` multinivel).
+  * **Perfiles Reales con Client Hints Sincronizados**: Rota firmas de navegadores modernos (Chrome 124 en Windows/macOS, Firefox 125) emparejando `User-Agent` con `sec-ch-ua`, `sec-ch-ua-mobile` y `sec-ch-ua-platform`.
+  * **Simulación de Navegación con `Referer` Dinámico**: Sigue la ruta de navegación interna entre enlaces como un usuario real.
+  * **Compresión Real (`Accept-Encoding: gzip, deflate, br`)**.
+  * **Jitter Aleatorio (350ms - 750ms)** que simula velocidad humana e impredecible.
+  * **Rescate Inteligente de Bloqueos (HTTP 403 / 429)**: Reintento automático con proxy residencial (**ScraperAPI**) en errores 403 y pausa de 3.5s con backoff en 429.
+* **Indexación Individual Bajo Demanda (Single-URL On-Demand)**:
+  * Botón directo `[▶ Indexar]` en la lista de URLs faltantes o pendientes para procesar y vectorizar cualquier página específica en 1 a 2 segundos sin disparar workflows masivos.
 * **Barra de Progreso en Vivo**:
   * Interfaz web con barra de progreso que consulta en tiempo real el porcentaje y estado del workflow en GitHub Actions (`/api/ingest/status`).
 * **Extracción de Entidades SEO**:
@@ -200,6 +203,28 @@ npm run mcp
 * Filtra la lista según los permisos del usuario logueado.
 * La eliminación (`DELETE`) está protegida exclusivamente para administradores.
 
+### 9. Indexación Individual Bajo Demanda (`POST /api/urls/index-single`)
+* Procesa, limpia con Turndown, vectoriza y sube a Pinecone una sola URL específica en 1–2 segundos de forma serverless.
+* **Body:**
+  ```json
+  {
+    "url": "https://midominio.com/pagina-especifica",
+    "namespace": "cliente-midominio",
+    "aiProvider": "gemini",
+    "customApiKey": "opcional_si_es_byok"
+  }
+  ```
+* **Respuesta Exitosa:**
+  ```json
+  {
+    "success": true,
+    "url": "https://midominio.com/pagina-especifica",
+    "chunksIndexed": 4,
+    "providerUsed": "gemini",
+    "message": "¡URL indexada con éxito! Se generaron y guardaron 4 vectores en Pinecone."
+  }
+  ```
+
 ---
 
 ## 🔌 Servidor MCP (Claude Desktop & Cursor)
@@ -262,7 +287,9 @@ scrapio/
 │   ├── api/
 │   │   ├── admin/users/route.ts # Panel administrativo: gestión de roles y proyectos
 │   │   ├── me/route.ts          # Perfil y permisos del usuario actual
-│   │   ├── urls/route.ts        # Auditoría de URLs escaneadas vs pendientes
+│   │   ├── urls/
+│   │   │   ├── route.ts         # Auditoría de URLs escaneadas vs pendientes
+│   │   │   └── index-single/route.ts # Indexación inmediata bajo demanda
 │   │   ├── chat/route.ts        # RAG query web con verificación de permisos y BYOK
 │   │   ├── entities/route.ts    # Extractor de entidades SEO semánticas
 │   │   ├── health/route.ts      # Diagnóstico de variables y estado de Pinecone
