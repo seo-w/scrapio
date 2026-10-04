@@ -1,12 +1,13 @@
 import { Pinecone, RecordMetadata } from "@pinecone-database/pinecone";
 
-export interface DocumentVectorMetadata extends RecordMetadata {
+export type DocumentVectorMetadata = RecordMetadata & {
   url: string;
   h1: string;
   text_chunk: string;
   client_namespace: string;
   createdAt: string;
-}
+  content_hash?: string;
+};
 
 export interface UpsertItem {
   id: string;
@@ -86,6 +87,35 @@ export async function deleteNamespace(namespace: string) {
   const ns = index.namespace(namespace);
   await ns.deleteAll();
   return { success: true };
+}
+
+/**
+ * Elimina todos los vectores asociados a una URL específica dentro de un namespace
+ */
+export async function deleteUrlVectors(namespace: string, targetUrl: string) {
+  const index = getPineconeIndex();
+  const ns = index.namespace(namespace);
+
+  const queryResponse = await ns.query({
+    vector: new Array(768).fill(0),
+    topK: 10000,
+    includeMetadata: true,
+  });
+
+  const idsToDelete: string[] = [];
+  if (queryResponse.matches) {
+    for (const match of queryResponse.matches) {
+      if (match.metadata && (match.metadata as any).url === targetUrl) {
+        idsToDelete.push(match.id);
+      }
+    }
+  }
+
+  if (idsToDelete.length > 0) {
+    await ns.deleteMany(idsToDelete);
+  }
+
+  return { success: true, count: idsToDelete.length };
 }
 
 /**

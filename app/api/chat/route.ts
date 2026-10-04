@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone } from "@/lib/pinecone";
 import { getScrapioUser } from "@/lib/auth";
+import { rerankHybridChunks } from "@/lib/hybrid";
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,8 +48,8 @@ export async function POST(req: NextRequest) {
     // 3. Vectorizar la consulta del usuario usando el proveedor y clave correspondiente
     const queryVector = await generateEmbedding(query, provider, 3, customApiKey);
 
-    // 4. Recuperar el contexto relevante desde Pinecone acotado al namespace
-    const matches = await queryPinecone(namespace, queryVector, 8);
+    // 4. Recuperar candidatos desde Pinecone y aplicar re-ranking híbrido léxico en memoria
+    const matches = await queryPinecone(namespace, queryVector, 12);
 
     if (matches.length === 0) {
       return NextResponse.json({
@@ -57,11 +58,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const contextChunks: ContextChunk[] = matches.map((match) => ({
-      url: match.metadata.url,
-      h1: match.metadata.h1,
-      text: match.metadata.text_chunk,
-    }));
+    const contextChunks: ContextChunk[] = rerankHybridChunks(query, matches, 8);
 
     // 5. Generar la respuesta RAG mediante el modelo seleccionado
     const { text, sources } = await generateRAGResponse(query, contextChunks, provider, customApiKey);

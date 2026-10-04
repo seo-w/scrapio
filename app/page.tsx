@@ -135,8 +135,26 @@ export default function Home() {
   const [availableNamespaces, setAvailableNamespaces] = useState<NamespaceInfo[]>([]);
   const [inputQuery, setInputQuery] = useState("");
 
-  // Historial de mensajes aislado por cada namespace / cliente
+  // Historial de mensajes aislado por cada namespace / cliente con persistencia
   const [messagesByNamespace, setMessagesByNamespace] = useState<Record<string, Message[]>>({});
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !namespace) return;
+    try {
+      const stored = localStorage.getItem(`scrapio_chat_${namespace}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessagesByNamespace((prev) => ({
+            ...prev,
+            [namespace]: parsed,
+          }));
+        }
+      }
+    } catch (e) {
+      console.error("Error cargando historial de chat de localStorage:", e);
+    }
+  }, [namespace]);
 
   const messages = messagesByNamespace[namespace] || [getWelcomeMessage(namespace)];
 
@@ -144,11 +162,29 @@ export default function Home() {
     setMessagesByNamespace((prev) => {
       const current = prev[namespace] || [getWelcomeMessage(namespace)];
       const nextMessages = typeof updater === "function" ? updater(current) : updater;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(`scrapio_chat_${namespace}`, JSON.stringify(nextMessages));
+        } catch (e) {
+          console.error("Error guardando historial de chat en localStorage:", e);
+        }
+      }
       return {
         ...prev,
         [namespace]: nextMessages,
       };
     });
+  };
+
+  const handleClearChat = () => {
+    const welcome = [getWelcomeMessage(namespace)];
+    setMessagesByNamespace((prev) => ({
+      ...prev,
+      [namespace]: welcome,
+    }));
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(`scrapio_chat_${namespace}`);
+    }
   };
 
   const [isLoading, setIsLoading] = useState(false);
@@ -232,6 +268,54 @@ export default function Home() {
     }
   };
 
+  const [deletingSingleUrl, setDeletingSingleUrl] = useState<string | null>(null);
+
+  const handleDeleteSingleUrl = async (urlToDelete: string) => {
+    if (deletingSingleUrl) return;
+    if (!confirm(`¿Eliminar los vectores asociados a esta URL de Pinecone?\n\n${urlToDelete}`)) return;
+
+    setDeletingSingleUrl(urlToDelete);
+    setSingleIndexStatus(null);
+
+    const activeNs = urlsAuditData?.namespace || namespace;
+
+    try {
+      const res = await fetch(
+        `/api/urls?namespace=${encodeURIComponent(activeNs)}&url=${encodeURIComponent(urlToDelete)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al eliminar la URL.");
+
+      setSingleIndexStatus({ url: urlToDelete, success: true, message: data.message });
+
+      // Actualizar estado local del modal de auditoría
+      setUrlsAuditData((prev) => {
+        if (!prev) return null;
+        const nextIndexed = prev.indexedUrls.filter((u) => u !== urlToDelete);
+        const nextPending = [urlToDelete, ...prev.pendingUrls];
+        const totalIndexed = nextIndexed.length;
+        const totalDiscovered = prev.totalDiscovered;
+        const progressPercent = totalDiscovered > 0 ? Math.round((totalIndexed / totalDiscovered) * 100) : 0;
+
+        return {
+          ...prev,
+          indexedUrls: nextIndexed,
+          pendingUrls: nextPending,
+          totalIndexed,
+          totalPending: nextPending.length,
+          progressPercent,
+        };
+      });
+
+      fetchNamespaces();
+    } catch (err: any) {
+      setSingleIndexStatus({ url: urlToDelete, success: false, message: err.message });
+    } finally {
+      setDeletingSingleUrl(null);
+    }
+  };
+
   const openUrlsAudit = async (targetNs?: string) => {
     const ns = targetNs || namespace;
     setIsUrlsAuditModalOpen(true);
@@ -288,9 +372,9 @@ export default function Home() {
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
 
-  // Consultas del día diferenciadas por proveedor de IA
-  const [geminiQueries, setGeminiQueries] = useState(234);
-  const [openaiQueries, setOpenaiQueries] = useState(48);
+  // Consultas del día diferenciadas por proveedor de IA (persistidas en localStorage)
+  const [geminiQueries, setGeminiQueries] = useState(0);
+  const [openaiQueries, setOpenaiQueries] = useState(0);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -453,6 +537,10 @@ export default function Home() {
     if (typeof window !== "undefined") {
       setCustomGeminiKey(localStorage.getItem("scrapio_byok_gemini") || "");
       setCustomOpenaiKey(localStorage.getItem("scrapio_byok_openai") || "");
+      const storedGemini = localStorage.getItem("scrapio_queries_gemini");
+      const storedOpenai = localStorage.getItem("scrapio_queries_openai");
+      if (storedGemini !== null) setGeminiQueries(parseInt(storedGemini, 10) || 0);
+      if (storedOpenai !== null) setOpenaiQueries(parseInt(storedOpenai, 10) || 0);
     }
   }, []);
 
@@ -525,9 +613,17 @@ export default function Home() {
 
       setMessages((prev) => [...prev, assistantMessage]);
       if (aiProvider === "gemini") {
-        setGeminiQueries((prev) => prev + 1);
+        setGeminiQueries((prev) => {
+          const next = prev + 1;
+          if (typeof window !== "undefined") localStorage.setItem("scrapio_queries_gemini", next.toString());
+          return next;
+        });
       } else {
-        setOpenaiQueries((prev) => prev + 1);
+        setOpenaiQueries((prev) => {
+          const next = prev + 1;
+          if (typeof window !== "undefined") localStorage.setItem("scrapio_queries_openai", next.toString());
+          return next;
+        });
       }
     } catch (err: any) {
       setMessages((prev) => [
@@ -1003,12 +1099,24 @@ export default function Home() {
                 <span>🔍 Ver URLs escaneadas vs faltantes</span>
               </button>
             </div>
-            <button
-              onClick={() => setIsClientSelectorOpen(true)}
-              className="text-base font-semibold text-slate-800 hover:text-slate-950 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-4 py-1.5 rounded-xl transition-colors cursor-pointer"
-            >
-              Cambiar cliente
-            </button>
+            <div className="flex items-center gap-2">
+              {messages.length > 1 && (
+                <button
+                  onClick={handleClearChat}
+                  title="Limpiar conversación actual"
+                  className="text-base text-slate-500 hover:text-red-600 border border-[#DCE4ED] bg-white px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Limpiar chat</span>
+                </button>
+              )}
+              <button
+                onClick={() => setIsClientSelectorOpen(true)}
+                className="text-base font-semibold text-slate-800 hover:text-slate-950 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-4 py-1.5 rounded-xl transition-colors cursor-pointer"
+              >
+                Cambiar cliente
+              </button>
+            </div>
           </section>
 
           {/* Chat Thread Section */}
@@ -1877,7 +1985,21 @@ export default function Home() {
                             {item.isIndexed ? "Indexada" : "En cola"}
                           </span>
 
-                          {!item.isIndexed && (
+                          {item.isIndexed ? (
+                            <button
+                              onClick={() => handleDeleteSingleUrl(item.url)}
+                              disabled={deletingSingleUrl === item.url}
+                              title="Eliminar vectores de esta URL de Pinecone"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 disabled:opacity-50 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            >
+                              {deletingSingleUrl === item.url ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              <span>{deletingSingleUrl === item.url ? "Borrando..." : "Eliminar"}</span>
+                            </button>
+                          ) : (
                             <button
                               onClick={() => handleIndexSingleUrl(item.url)}
                               disabled={indexingSingleUrl === item.url}

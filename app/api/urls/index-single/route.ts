@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       const chunk = chunks[j];
       const vector = vectors[j];
       const idHash = crypto.createHash("md5").update(`${chunk.url}#${j}`).digest("hex");
+      const contentHash = crypto.createHash("md5").update(chunk.text).digest("hex");
 
       upsertItems.push({
         id: `${namespace}-${idHash}`,
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
           text_chunk: chunk.text,
           client_namespace: namespace,
           createdAt: new Date().toISOString(),
+          content_hash: contentHash,
         },
       });
     }

@@ -83,3 +83,48 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await getScrapioUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado." }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const namespace = searchParams.get("namespace");
+    const targetUrl = searchParams.get("url");
+
+    if (!namespace || !targetUrl) {
+      return NextResponse.json(
+        { error: "Los parámetros 'namespace' y 'url' son obligatorios." },
+        { status: 400 }
+      );
+    }
+
+    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+      return NextResponse.json(
+        { error: "No tienes permiso para modificar este proyecto." },
+        { status: 403 }
+      );
+    }
+
+    const { deleteUrlVectors } = await import("@/lib/pinecone");
+    const result = await deleteUrlVectors(namespace, targetUrl);
+
+    return NextResponse.json({
+      success: true,
+      url: targetUrl,
+      namespace,
+      deletedCount: result.count,
+      message: `La URL '${targetUrl}' y sus ${result.count} vectores fueron eliminados de Pinecone.`,
+    });
+  } catch (err: any) {
+    console.error("Error en DELETE /api/urls:", err);
+    return NextResponse.json(
+      { error: err.message || "Error al eliminar la URL en Pinecone." },
+      { status: 500 }
+    );
+  }
+}
+

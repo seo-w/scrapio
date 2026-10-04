@@ -30,6 +30,17 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
   * **Compresión Real (`Accept-Encoding: gzip, deflate, br`)**.
   * **Jitter Aleatorio (350ms - 750ms)** que simula velocidad humana e impredecible.
   * **Rescate Inteligente de Bloqueos (HTTP 403 / 429)**: Reintento automático con proxy residencial (**ScraperAPI**) en errores 403 y pausa de 3.5s con backoff en 429.
+* **Búsqueda Híbrida en Memoria (Hybrid Search a Costo Cero)**:
+  * Combina similitud vectorial (Pinecone cosine similarity) con re-ranking léxico en memoria (<2ms de latencia, 0 bytes extra de almacenamiento en Pinecone).
+  * Otorga un impulso de relevancia (*exact keyword & phrase match boost*) cuando la consulta contiene términos técnicos, códigos, IDs, precios o nombres exactos.
+* **Persistencia de Conversaciones por Proyecto**:
+  * Los mensajes del chat se preservan de forma local en el navegador (`localStorage`) de manera aislada por cada namespace/cliente, sobreviviendo a recargas de página (F5).
+  * Incluye botón **"Limpiar chat"** en la barra superior para reiniciar la conversación cuando sea necesario.
+* **Borrado Granular de URLs & Hashing de Contenido**:
+  * Endpoint `DELETE /api/urls?namespace=...&url=...` y botón `[🗑 Eliminar]` en el modal de auditoría para suprimir de inmediato los vectores de cualquier URL específica en Pinecone sin afectar el resto del sitio.
+  * Ingesta con hash criptográfico MD5 (`content_hash`) en los metadatos de Pinecone para auditoría y control de duplicados.
+* **Métricas de Consumo Real en Tiempo Real**:
+  * Contadores de consultas ejecutadas para Gemini y OpenAI persistidos localmente, reflejando el volumen real de interacciones por motor.
 * **Indexación Individual Bajo Demanda (Single-URL On-Demand)**:
   * Botón directo `[▶ Indexar]` en la lista de URLs faltantes o pendientes para procesar y vectorizar cualquier página específica en 1 a 2 segundos sin disparar workflows masivos.
 * **Barra de Progreso en Vivo**:
@@ -186,8 +197,9 @@ npm run mcp
 ### 3. Perfil de Usuario (`GET /api/me`)
 * Devuelve el rol del usuario actual, su correo, nombre y lista de proyectos autorizados.
 
-### 4. Auditoría de URLs (`GET /api/urls?namespace=...`)
-* Compara en tiempo real las URLs vectorizadas en Pinecone contra las URLs descubiertas en el sitemap XML.
+### 4. Auditoría y Eliminación de URLs (`GET / DELETE /api/urls`)
+* **`GET ?namespace=...`**: Compara en tiempo real las URLs vectorizadas en Pinecone contra las URLs descubiertas en el sitemap XML.
+* **`DELETE ?namespace=...&url=...`**: Busca y elimina todos los vectores correspondientes a la URL especificada en el namespace sin alterar las demás páginas indexadas.
 
 ### 5. Endpoint Headless con Autenticación Bearer (`POST /api/v1/query`)
 * **Headers:** `Authorization: Bearer <SCRAPIO_API_KEY>`
