@@ -22,28 +22,71 @@ const turndownService = new TurndownService({
   codeBlockStyle: "fenced",
 });
 
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+interface BrowserProfile {
+  userAgent: string;
+  secChUa?: string;
+  secChUaMobile?: string;
+  secChUaPlatform?: string;
+}
+
+const BROWSER_PROFILES: BrowserProfile[] = [
+  {
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    secChUaMobile: "?0",
+    secChUaPlatform: '"Windows"',
+  },
+  {
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    secChUaMobile: "?0",
+    secChUaPlatform: '"macOS"',
+  },
+  {
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+  },
+  {
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    secChUa: '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    secChUaMobile: "?0",
+    secChUaPlatform: '"Linux"',
+  },
 ];
 
-const BASE_HEADERS = {
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
-  "Sec-Fetch-Dest": "document",
-  "Sec-Fetch-Mode": "navigate",
+const getHeaders = (referer?: string) => {
+  const profile = BROWSER_PROFILES[Math.floor(Math.random() * BROWSER_PROFILES.length)];
+
+  const headers: Record<string, string> = {
+    "User-Agent": profile.userAgent,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": referer ? "same-origin" : "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
+  };
+
+  if (profile.secChUa) {
+    headers["sec-ch-ua"] = profile.secChUa;
+    headers["sec-ch-ua-mobile"] = profile.secChUaMobile || "?0";
+    headers["sec-ch-ua-platform"] = profile.secChUaPlatform || '"Windows"';
+  }
+
+  if (referer) {
+    headers["Referer"] = referer;
+  }
+
+  return headers;
 };
 
-const getHeaders = () => ({
-  ...BASE_HEADERS,
-  "User-Agent": USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
-});
-
-const toScraperUrl = (url: string) => {
+const toScraperUrl = (url: string, forceProxy = false) => {
   const key = process.env.SCRAPER_API_KEY;
-  return key ? `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}` : url;
+  if (!key) return url;
+  if (!forceProxy && !key) return url;
+  return `http://api.scraperapi.com?api_key=${key}&url=${encodeURIComponent(url)}&country_code=us&device_type=desktop`;
 };
 
 turndownService.remove((node) => {
@@ -126,7 +169,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
   }
 
   const visitedUrls = new Set<string>();
-  const queue: { url: string; depth: number }[] = [{ url: normalizedStart, depth: 0 }];
+  const queue: { url: string; depth: number; referer?: string }[] = [{ url: normalizedStart, depth: 0 }];
   const allChunks: PageChunk[] = [];
 
   const textSplitter = new RecursiveCharacterTextSplitter({
@@ -149,7 +192,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
         for (const u of sitemapUrls) {
           const norm = normalizeUrl(u, normalizedStart);
           if (norm && isSameDomain(norm, normalizedStart) && !norm.endsWith(".xml")) {
-            queue.push({ url: norm, depth: 1 });
+            queue.push({ url: norm, depth: 1, referer: normalizedStart });
           }
         }
         break;
@@ -163,7 +206,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     const item = queue.shift();
     if (!item) break;
 
-    const { url, depth } = item;
+    const { url, depth, referer } = item;
 
     // Ignorar si ya fue visitada o si es un archivo .xml
     if (visitedUrls.has(url) || url.endsWith(".xml")) continue;
@@ -171,12 +214,19 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
 
     try {
       console.log(`🌐 Scrapeando (${visitedUrls.size}/${maxPages}) [Profundidad ${depth}]: ${url}`);
-      const response = await fetch(toScraperUrl(url), { headers: getHeaders() });
+      let response = await fetch(toScraperUrl(url), { headers: getHeaders(referer) });
+
+      // Si detectamos HTTP 403 (Bloqueo WAF/Cloudflare) y hay ScraperAPI configurada, reintentar con proxy residencial
+      if (response.status === 403 && process.env.SCRAPER_API_KEY) {
+        console.warn(`🛡️ HTTP 403 detectado en ${url}. Reintentando automáticamente con proxy residencial de ScraperAPI...`);
+        await new Promise((res) => setTimeout(res, 800));
+        response = await fetch(toScraperUrl(url, true), { headers: getHeaders(referer) });
+      }
 
       if (response.status === 429) {
         console.warn(`⏳ El sitio respondió con HTTP 429 (Límite de peticiones). Pausando 3.5 segundos antes de reintentar ${url}...`);
         visitedUrls.delete(url); // Permitir reintento
-        queue.unshift({ url, depth }); // Devolver a la cola
+        queue.unshift({ url, depth, referer }); // Devolver a la cola
         await new Promise((res) => setTimeout(res, 3500));
         continue;
       }
@@ -239,7 +289,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
           const resolved = normalizeUrl(href, url);
           if (resolved && isSameDomain(resolved, normalizedStart) && !visitedUrls.has(resolved)) {
             if (!/\.(pdf|png|jpg|jpeg|gif|css|js|zip|svg|ico|xml)$/i.test(resolved)) {
-              queue.push({ url: resolved, depth: depth + 1 });
+              queue.push({ url: resolved, depth: depth + 1, referer: url });
             }
           }
         });
@@ -266,7 +316,15 @@ export async function scrapeSingleUrl(
   chunkSize = 1000,
   chunkOverlap = 150
 ): Promise<PageChunk[]> {
-  const response = await fetch(toScraperUrl(url), { headers: getHeaders() });
+  const origin = new URL(url).origin;
+  let response = await fetch(toScraperUrl(url), { headers: getHeaders(origin) });
+
+  // Si detectamos HTTP 403 (Protección Cloudflare/WAF) y hay ScraperAPI configurada, rescatar automáticamente
+  if (response.status === 403 && process.env.SCRAPER_API_KEY) {
+    console.warn(`🛡️ HTTP 403 detectado en single-url ${url}. Reintentando con proxy residencial de ScraperAPI...`);
+    await new Promise((res) => setTimeout(res, 800));
+    response = await fetch(toScraperUrl(url, true), { headers: getHeaders(origin) });
+  }
 
   if (!response.ok) {
     throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
