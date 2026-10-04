@@ -32,6 +32,7 @@ import {
   Shield,
   Save,
   AlertCircle,
+  Play,
 } from "lucide-react";
 
 interface Message {
@@ -176,11 +177,67 @@ export default function Home() {
   const [urlsTab, setUrlsTab] = useState<"all" | "indexed" | "pending">("all");
   const [urlsSearchFilter, setUrlsSearchFilter] = useState("");
 
+  const [indexingSingleUrl, setIndexingSingleUrl] = useState<string | null>(null);
+  const [singleIndexStatus, setSingleIndexStatus] = useState<{ url: string; success: boolean; message: string } | null>(null);
+
+  const handleIndexSingleUrl = async (urlToIndex: string) => {
+    if (indexingSingleUrl) return;
+    setIndexingSingleUrl(urlToIndex);
+    setSingleIndexStatus(null);
+
+    const activeCustomKey = (aiProvider === "openai" ? customOpenaiKey : customGeminiKey).trim() || undefined;
+
+    try {
+      const res = await fetch("/api/urls/index-single", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: urlToIndex,
+          namespace,
+          aiProvider,
+          customApiKey: activeCustomKey,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al indexar la URL.");
+
+      setSingleIndexStatus({ url: urlToIndex, success: true, message: data.message });
+
+      // Actualizar estado local del modal de auditoría
+      setUrlsAuditData((prev) => {
+        if (!prev) return null;
+        const nextPending = prev.pendingUrls.filter((u) => u !== urlToIndex);
+        const nextIndexed = [urlToIndex, ...prev.indexedUrls];
+        const totalIndexed = nextIndexed.length;
+        const totalDiscovered = prev.totalDiscovered;
+        const progressPercent = totalDiscovered > 0 ? Math.round((totalIndexed / totalDiscovered) * 100) : 100;
+
+        return {
+          ...prev,
+          pendingUrls: nextPending,
+          indexedUrls: nextIndexed,
+          totalIndexed,
+          totalPending: nextPending.length,
+          progressPercent,
+        };
+      });
+
+      // Refrescar lista de namespaces en segundo plano
+      fetchNamespaces();
+    } catch (err: any) {
+      setSingleIndexStatus({ url: urlToIndex, success: false, message: err.message });
+    } finally {
+      setIndexingSingleUrl(null);
+    }
+  };
+
   const openUrlsAudit = async (targetNs?: string) => {
     const ns = targetNs || namespace;
     setIsUrlsAuditModalOpen(true);
     setIsLoadingUrlsAudit(true);
     setUrlsSearchFilter("");
+    setSingleIndexStatus(null);
     try {
       const res = await fetch(`/api/urls?namespace=${encodeURIComponent(ns)}`);
       const data = await res.json();
@@ -1733,6 +1790,32 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Banner de estado de indexación individual */}
+                {singleIndexStatus && (
+                  <div
+                    className={`p-3 rounded-xl border text-sm flex items-center justify-between gap-2 mb-1 ${
+                      singleIndexStatus.success
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                        : "bg-red-50 border-red-200 text-red-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      {singleIndexStatus.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                      )}
+                      <span className="truncate">{singleIndexStatus.message}</span>
+                    </div>
+                    <button
+                      onClick={() => setSingleIndexStatus(null)}
+                      className="p-1 hover:bg-black/5 rounded cursor-pointer shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Lista scrolleable de URLs */}
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[220px]">
                   {(() => {
@@ -1783,15 +1866,33 @@ export default function Home() {
                           </a>
                         </div>
 
-                        <span
-                          className={`px-2.5 py-0.5 rounded-md font-semibold text-xs shrink-0 ${
-                            item.isIndexed
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {item.isIndexed ? "Indexada" : "En cola"}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-md font-semibold text-xs shrink-0 ${
+                              item.isIndexed
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {item.isIndexed ? "Indexada" : "En cola"}
+                          </span>
+
+                          {!item.isIndexed && (
+                            <button
+                              onClick={() => handleIndexSingleUrl(item.url)}
+                              disabled={indexingSingleUrl === item.url}
+                              title="Indexar esta URL individual ahora mismo bajo demanda"
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            >
+                              {indexingSingleUrl === item.url ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Play className="w-3 h-3 fill-current" />
+                              )}
+                              <span>{indexingSingleUrl === item.url ? "Indexando..." : "Indexar"}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ));
                   })()}

@@ -257,3 +257,68 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
   console.log(`✅ Rastreo completado. Total páginas procesadas: ${visitedUrls.size}, Total Chunks generados: ${allChunks.length}`);
   return allChunks;
 }
+
+/**
+ * Scrapea y extrae los fragmentos semánticos de una sola página bajo demanda
+ */
+export async function scrapeSingleUrl(
+  url: string,
+  chunkSize = 1000,
+  chunkOverlap = 150
+): Promise<PageChunk[]> {
+  const response = await fetch(toScraperUrl(url), { headers: getHeaders() });
+
+  if (!response.ok) {
+    throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) {
+    throw new Error(`El recurso no es HTML (${contentType})`);
+  }
+
+  const html = await response.text();
+  const $ = cheerio.load(html);
+
+  const h1Text = $("h1").first().text().trim() || $("title").text().trim() || "Sin Título";
+
+  // 1. Detectar y convertir imágenes que son enlaces en CTAs
+  $("a").each((_, el) => {
+    const $a = $(el);
+    const $img = $a.find("img");
+    if ($img.length > 0 && !$a.text().trim()) {
+      const alt = $img.attr("alt")?.trim() || $img.attr("title")?.trim() || "Imagen con enlace";
+      const href = $a.attr("href") || "";
+      if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
+        $a.replaceWith(`<p><strong>[Banner de Conversión / CTA: "${alt}"](${href})</strong></p>`);
+      }
+    }
+  });
+
+  // 2. Eliminar ruido visual e interfaces repetitivas
+  $("nav, footer, header, script, style, noscript, svg, iframe, form").remove();
+
+  // 3. Selección jerárquica del contenedor principal
+  const mainContainer = $(
+    "main, article, [role='main'], #main-content, #content, .post-content, .entry-content, .article-content, .page-content, .blog-post, .content, body"
+  ).first();
+  const htmlContent = mainContainer.html() || "";
+  const markdown = turndownService.turndown(htmlContent).trim();
+
+  if (markdown.length < 50) {
+    throw new Error("La página tiene contenido insuficiente o está protegida contra scraping.");
+  }
+
+  const textSplitter = new RecursiveCharacterTextSplitter({
+    chunkSize,
+    chunkOverlap,
+  });
+
+  const chunks = await textSplitter.splitText(markdown);
+  return chunks.map((chunkText) => ({
+    url,
+    h1: h1Text,
+    text: chunkText,
+  }));
+}
+

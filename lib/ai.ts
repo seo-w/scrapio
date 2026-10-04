@@ -85,7 +85,8 @@ export async function generateEmbeddingsBatch(
   texts: string[],
   overrideProvider?: string,
   batchSize = 3,
-  delayMs = 350
+  delayMs = 350,
+  customApiKey?: string
 ): Promise<{ vectors: number[][]; processedCount: number; quotaExhausted: boolean }> {
   const vectors: number[][] = [];
   let quotaExhausted = false;
@@ -96,7 +97,7 @@ export async function generateEmbeddingsBatch(
     
     try {
       const batchResults = await Promise.all(
-        batch.map((t) => generateEmbedding(t, overrideProvider))
+        batch.map((t) => generateEmbedding(t, overrideProvider, 3, customApiKey))
       );
       vectors.push(...batchResults);
     } catch (err: any) {
