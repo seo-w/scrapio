@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getIndexStats, queryPinecone, resolvePineconeNamespace } from "@/lib/pinecone";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
