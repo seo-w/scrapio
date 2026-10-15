@@ -55,23 +55,26 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Si el sitemap no responde o no existe, las descubiertas son al menos las ya indexadas
-    if (discoveredUrls.length === 0) {
-      discoveredUrls = [...indexedUrls];
-    }
+    // 3. Universo total conocido = Sitemap XML ∪ URLs ya indexadas en Pinecone
+    const allKnownUrlsSet = new Set<string>([...discoveredUrls, ...indexedUrls]);
+    const allKnownUrls = Array.from(allKnownUrlsSet);
 
-    const pendingUrls = discoveredUrls.filter((u) => !existingSet.has(u));
+    // URLs pendientes que están en el sitemap pero aún no tienen vectores en Pinecone
+    const pendingUrls = allKnownUrls.filter((u) => !existingSet.has(u));
+
+    const totalDiscovered = allKnownUrls.length;
+    const totalIndexed = indexedUrls.length;
+    const progressPercent = totalDiscovered > 0
+      ? Math.min(100, Math.round((totalIndexed / totalDiscovered) * 100))
+      : 100;
 
     return NextResponse.json({
       namespace,
       domain,
-      totalDiscovered: discoveredUrls.length,
-      totalIndexed: indexedUrls.length,
+      totalDiscovered,
+      totalIndexed,
       totalPending: pendingUrls.length,
-      progressPercent:
-        discoveredUrls.length > 0
-          ? Math.round((indexedUrls.length / discoveredUrls.length) * 100)
-          : 100,
+      progressPercent,
       indexedUrls,
       pendingUrls,
     });

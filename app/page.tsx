@@ -1939,7 +1939,7 @@ export default function Home() {
                   <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
                     <div
                       className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${urlsAuditData.progressPercent}%` }}
+                      style={{ width: `${Math.min(100, Math.max(0, urlsAuditData.progressPercent))}%` }}
                     ></div>
                   </div>
                   <div className="flex items-center justify-between pt-1 text-base">
