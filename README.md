@@ -48,10 +48,17 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
   * **Modal de Diagnóstico y Logs**: Permite hacer clic en el indicador de estado para ver la ejecución activa, pasos del pipeline, detección de fallos o pausas por límite de cuota (Gemini 15 RPM) y botón directo a los logs completos de GitHub Actions.
 * **Extracción de Entidades SEO**:
   * Endpoint `/api/entities` para analizar y extraer entidades semánticas clave de los sitios indexados.
-* **Integración MCP & OpenAPI con Auto-Inyección de API Key**:
-  * Servidor MCP nativo (`npm run mcp`) para consultar Scrapio desde **Claude Desktop**, **Cursor** o agentes IA.
-  * Modal interactivo **"Conecta Scrapio con tu LLM Preferido"**: visualización segura de la clave del usuario con botón de visibilidad y prompts 100% listos para copiar con la API Key ya pre-insertada.
-  * Especificación `/api/openapi.json` abierta para conectar con GPTs personalizados de OpenAI o herramientas externas sin bloqueos de sesión.
+* **Integración MCP (Model Context Protocol) Dual (Remoto HTTP/SSE y Local Stdio)**:
+  * **Servidor MCP Remoto Serverless**: Endpoint nativo en `/api/v1/mcp?key=...` compatible con Cursor, Windsurf y Claude Web vía HTTP JSON-RPC y Server-Sent Events (SSE) sin instalar Node.js local.
+  * **Servidor MCP Local (`scripts/mcp-server.mjs`)**: Script sin dependencias externas compiladas, compatible con `claude_desktop_config.json`.
+  * **Herramientas MCP Integradas**:
+    * `list_scraped_sites`: Lista de clientes y sitios indexados con su conteo de vectores.
+    * `query_site`: RAG semántico con citas y metadatos de fuentes.
+    * `get_site_entities`: Extracción de entidades SEO clave (marcas, directivos, servicios, Schema.org).
+* **Resolución Inteligente y Tolerante de Namespaces**:
+  * Normalización flexible en Pinecone: resuelve consultas sin importar si el usuario o agente escribe `internexa`, `Internexa`, `blog-internexa` o `Blog internexa`.
+* **Modal de Integraciones con Auto-Inyección de Clave**:
+  * Pestañas especializadas para Prompt Directo, Custom GPTs (OpenAPI 3.0), Claude & Cursor (MCP), Python & cURL y n8n/Make con la API Key del usuario pre-insertada.
 
 ---
 
@@ -204,18 +211,15 @@ npm run mcp
 * **`DELETE ?namespace=...&url=...`**: Busca y elimina todos los vectores correspondientes a la URL especificada en el namespace sin alterar las demás páginas indexadas.
 
 ### 5. API Headless para LLMs y Agentes Externos (`/api/v1/*`)
-* **Autenticación:**
+* **Autenticación Flexible:**
   * Cabecera HTTP: `Authorization: Bearer <SCRAPIO_API_KEY>`
-  * O parámetro URL (GET): `?key=<SCRAPIO_API_KEY>` (o `?apiKey=...`)
-* **Auto-Inyección en UI:**
-  * El endpoint `/api/me` entrega la clave de API activa de forma segura a usuarios autenticados.
-  * La interfaz web inyecta automáticamente la clave real en los botones de copiado de prompts y ejemplos de cURL/n8n.
+  * Cabecera HTTP: `X-API-Key: <SCRAPIO_API_KEY>`
+  * O parámetro de consulta (Query param): `?key=<SCRAPIO_API_KEY>` (o `?apiKey=...`)
 * **Endpoints:**
-  * **`GET /api/v1/namespaces`**: Devuelve el listado de sitios/clientes indexados y su cantidad de vectores en Pinecone. Ideal para que Claude u otros LLMs consulten los proyectos sin requerir cookies ni sesión de Clerk:
-    ```
-    https://tu-app.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY
-    ```
-  * **`POST /api/v1/query`**: Consulta RAG semántica serverless. Ideal para agentes de IA externos, n8n, Make y Claude Desktop sin requerir sesión interactiva.
+  * **`GET /api/v1/namespaces`**: Devuelve el listado de todos los sitios/clientes indexados y su cantidad de vectores en Pinecone.
+  * **`POST /api/v1/query`**: Consulta RAG semántica serverless con citas de fuentes y CTAs.
+  * **`POST /api/v1/entities`**: Extracción completa de entidades SEO (marcas, directivos, servicios, ubicaciones y Schema.org sugerido).
+  * **`POST / GET /api/v1/mcp`**: Endpoint oficial de servidor **Model Context Protocol (MCP)** compatible con transporte JSON-RPC y SSE.
 
 ### 6. Disparo de Ingesta a GitHub Actions (`POST /api/ingest`)
 * Inicia la extracción y vectorización automatizada en la nube vía GitHub REST API.
@@ -238,38 +242,41 @@ npm run mcp
     "customApiKey": "opcional_si_es_byok"
   }
   ```
-* **Respuesta Exitosa:**
-  ```json
-  {
-    "success": true,
-    "url": "https://midominio.com/pagina-especifica",
-    "chunksIndexed": 4,
-    "providerUsed": "gemini",
-    "message": "¡URL indexada con éxito! Se generaron y guardaron 4 vectores en Pinecone."
-  }
-  ```
 
 ---
 
-## 🔌 Servidor MCP (Claude Desktop & Cursor)
+## 🔌 Servidor MCP (Model Context Protocol)
 
-Scrapio incluye un servidor **Model Context Protocol** en [scripts/mcp-server.ts](file:///c:/Users/seo_w/Documents/SEO%20scrapio/scripts/mcp-server.ts).
+Scrapio ofrece dos modalidades para conectar con agentes de inteligencia artificial:
 
-### Configuración en Claude Desktop (`claude_desktop_config.json`):
+### Modalidad 1: Servidor MCP Remoto por URL (Cursor, Windsurf, Claude Web)
+No requiere instalar dependencias ni tener Node.js local. Configura un servidor MCP de tipo **SSE / HTTP** con la URL:
+```text
+https://scrapio-one.vercel.app/api/v1/mcp?key=TU_SCRAPIO_API_KEY
+```
+
+### Modalidad 2: Claude Desktop Local (`claude_desktop_config.json`)
+Utiliza el script independiente [`scripts/mcp-server.mjs`](file:///c:/Users/seo_w/Documents/SEO%20scrapio/scripts/mcp-server.mjs) (Node.js nativo sin librerías pesadas):
+
 ```json
 {
   "mcpServers": {
     "scrapio": {
       "command": "node",
-      "args": ["C:/ruta/a/scrapio/scripts/mcp-server.ts"],
+      "args": ["scripts/mcp-server.mjs"],
       "env": {
-        "SCRAPIO_API_URL": "https://tu-app.vercel.app",
-        "SCRAPIO_API_KEY": "tu_token_secreto"
+        "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",
+        "SCRAPIO_API_KEY": "sk_scrapio_default_secret_key_2026"
       }
     }
   }
 }
 ```
+
+### Herramientas MCP expuestas:
+1. `list_scraped_sites`: Retorna todos los sitios y clientes indexados con cantidad de vectores.
+2. `query_site`: Ejecuta búsqueda semántica RAG citando fuentes exactas del sitio indexado.
+3. `get_site_entities`: Extrae entidades SEO, productos, servicios y marcado Schema.org del sitio.
 
 ---
 
@@ -321,6 +328,8 @@ scrapio/
 │   │   ├── namespaces/route.ts  # Listado filtrado por usuario y borrado seguro
 │   │   ├── openapi.json/route.ts# Especificación OpenAPI 3.0
 │   │   └── v1/
+│   │       ├── mcp/route.ts        # Servidor nativo MCP (HTTP JSON-RPC & SSE)
+│   │       ├── entities/route.ts   # Extracción de entidades SEO con API Key
 │   │       ├── namespaces/route.ts # Listado headless de clientes/namespaces con API Key
 │   │       └── query/route.ts      # RAG query headless con API Key
 │   ├── globals.css              # Estilos Tailwind CSS
@@ -330,10 +339,11 @@ scrapio/
 │   ├── auth.ts                  # Helper de autenticación y roles de Clerk
 │   ├── ai.ts                    # Adaptador dual Gemini / OpenAI (Embeddings 768d + LLMs) con BYOK
 │   ├── crawler.ts               # Crawler multi-página con Jitter, User-Agent pool y sitemaps
-│   └── pinecone.ts              # Cliente y operaciones aisladas en Pinecone
+│   └── pinecone.ts              # Cliente y resolución inteligente de namespaces en Pinecone
 ├── scripts/
 │   ├── ingest.ts                # CLI ejecutable de scraping e ingesta
-│   └── mcp-server.ts            # Servidor Model Context Protocol
+│   ├── mcp-server.mjs           # Servidor MCP ligero en JS puro sin dependencias externas
+│   └── mcp-server.ts            # Servidor MCP en TypeScript
 ├── .env.example                 # Plantilla completa de variables de entorno
 └── README.md                    # Documentación técnica completa y guía de replicación
 ```
