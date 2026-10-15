@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/v1(.*)", // API Headless para MCP / Claude Desktop autenticada vía token SCRAPIO_API_KEY
   "/api/openapi.json(.*)", // Especificación OpenAPI para GPTs y herramientas externas
+  "/api/ingest/status(.*)", // Reporte de progreso en vivo desde el runner de GitHub Actions
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
