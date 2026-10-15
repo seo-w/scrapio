@@ -1652,18 +1652,21 @@ export default function Home() {
                       <button
                         onClick={() =>
                           copyToClipboard(
-                            "Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente"
+                            "Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY. Muéstrame una lista numerada de los sitios/cliente"
                           )
                         }
-                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700"
+                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
                       >
                         {copiedSnippet ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                         <span>Copiar Prompt</span>
                       </button>
                     </div>
                     <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-emerald-900 select-all">
-                      Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/namespaces. Muéstrame una lista numerada de los sitios/cliente
+                      Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY. Muéstrame una lista numerada de los sitios/cliente
                     </div>
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      💡 Reemplaza <code>TU_SCRAPIO_API_KEY</code> por tu clave secreta de Scrapio (configurada en tu .env o Vercel).
+                    </p>
                   </div>
 
                   <div>
@@ -1674,10 +1677,10 @@ export default function Home() {
                       <button
                         onClick={() =>
                           copyToClipboard(
-                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
+                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer TU_SCRAPIO_API_KEY" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
                           )
                         }
-                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700"
+                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
                       >
                         {copiedSnippet ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                         <span>Copiar Prompt Completo</span>
@@ -1685,10 +1688,13 @@ export default function Home() {
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-base text-slate-800 whitespace-pre-line leading-relaxed select-all">
                       {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
-1. Consulta https://scrapio-one.vercel.app/api/namespaces y lístame los clientes/sitios web disponibles.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
+1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY y lístame los clientes/sitios web disponibles.
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer TU_SCRAPIO_API_KEY" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
 3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
                     </div>
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      💡 Reemplaza <code>TU_SCRAPIO_API_KEY</code> por tu clave secreta de Scrapio.
+                    </p>
                   </div>
                 </div>
               )}
@@ -1702,7 +1708,7 @@ export default function Home() {
                     <span>https://scrapio-one.vercel.app/api/openapi.json</span>
                     <button
                       onClick={() => copyToClipboard("https://scrapio-one.vercel.app/api/openapi.json")}
-                      className="p-1 hover:text-blue-900 text-slate-500"
+                      className="p-1 hover:text-blue-900 text-slate-500 cursor-pointer"
                     >
                       {copiedSnippet ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5" />}
                     </button>
@@ -1736,6 +1742,7 @@ export default function Home() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-slate-800 overflow-x-auto">
                     <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer TU_SCRAPIO_API_KEY" \\
   -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${namespace}"}'`}</pre>
                   </div>
                 </div>
@@ -1747,6 +1754,7 @@ export default function Home() {
                   <ul className="list-disc list-inside space-y-2 text-base text-slate-700">
                     <li><strong>Método:</strong> POST</li>
                     <li><strong>URL:</strong> <code>https://scrapio-one.vercel.app/api/v1/query</code></li>
+                    <li><strong>Headers:</strong> <code>Authorization: Bearer TU_SCRAPIO_API_KEY</code></li>
                     <li><strong>Body:</strong> <code>{`{ "query": "{{ $json.prompt }}", "namespace": "${namespace}" }`}</code></li>
                   </ul>
                 </div>
