@@ -7,15 +7,16 @@ export async function OPTIONS() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
     },
   });
 }
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Obtener token desde Header 'Authorization: Bearer <TOKEN>' o desde query param '?key=<TOKEN>'
+    // 1. Obtener token desde Header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o query param '?key=<TOKEN>'
     const authHeader = req.headers.get("Authorization");
+    const xApiKey = req.headers.get("X-API-Key");
     const { searchParams } = new URL(req.url);
     const queryKey = searchParams.get("key") || searchParams.get("apiKey") || searchParams.get("token");
 
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
     let token = "";
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.substring(7).trim();
+    } else if (xApiKey) {
+      token = xApiKey.trim();
     } else if (queryKey) {
       token = queryKey.trim();
     }
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Se requiere un header 'Authorization: Bearer <TOKEN>' o el parámetro de consulta '?key=<TOKEN>'.",
+            "No autorizado. Se requiere un header 'Authorization: Bearer <TOKEN>', 'X-API-Key: <TOKEN>' o el parámetro de consulta '?key=<TOKEN>'.",
         },
         {
           status: 401,
@@ -60,6 +63,7 @@ export async function GET(req: NextRequest) {
 
     const namespacesList = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
       name,
+      slug: name.toLowerCase().replace(/\s+/g, "-"),
       vectorCount: data.recordCount || 0,
     }));
 

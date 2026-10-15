@@ -7,7 +7,7 @@
 import readline from "readline";
 
 // URL base de tu aplicación en Vercel (o localhost para pruebas)
-const BASE_URL = process.env.SCRAPIO_API_URL || "http://localhost:3000";
+const BASE_URL = process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
 const API_KEY = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
 
 interface JsonRpcRequest {
@@ -129,7 +129,9 @@ rl.on("line", async (line) => {
         }
 
         if (toolName === "get_site_entities") {
-          const res = await fetch(`${BASE_URL}/api/entities?namespace=${encodeURIComponent(args.namespace)}`);
+          const res = await fetch(`${BASE_URL}/api/v1/entities?namespace=${encodeURIComponent(args.namespace)}`, {
+            headers: { Authorization: `Bearer ${API_KEY}` },
+          });
           const data = await res.json();
           const text = data.analysis || JSON.stringify(data, null, 2);
           return send({

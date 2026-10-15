@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
   const openApiSpec = {
     openapi: "3.1.0",
     info: {
-      title: "Scrapio SEO API",
-      description: "API de Scrapio para consultar contenido web scrapeado, extraer entidades SEO y realizar consultas RAG con Inteligencia Artificial.",
+      title: "Scrapio Headless RAG & SEO API",
+      description:
+        "API oficial de Scrapio para consultar conocimiento web vectorizado, realizar consultas RAG semánticas por namespace y extraer entidades SEO.",
       version: "1.0.0",
     },
     servers: [
@@ -18,12 +19,55 @@ export async function GET(req: NextRequest) {
         description: "Servidor activo de Scrapio",
       },
     ],
+    security: [
+      {
+        bearerAuth: [],
+      },
+      {
+        apiKeyQuery: [],
+      },
+      {
+        apiKeyHeader: [],
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "API Key",
+          description: "Ingresa tu Scrapio API Key (sk_scrapio_...)",
+        },
+        apiKeyHeader: {
+          type: "apiKey",
+          in: "header",
+          name: "X-API-Key",
+          description: "Scrapio API Key en cabecera HTTP",
+        },
+        apiKeyQuery: {
+          type: "apiKey",
+          in: "query",
+          name: "key",
+          description: "Scrapio API Key como parámetro de consulta en la URL",
+        },
+      },
+    },
     paths: {
       "/api/v1/namespaces": {
         get: {
-          operationId: "listSitesV1",
-          summary: "Listar sitios web y clientes disponibles (Headless API)",
-          description: "Devuelve los nombres de los sitios scrapeados (namespaces) y cuántos vectores de conocimiento tienen. Requiere Authorization: Bearer <TOKEN> o parámetro ?key=<TOKEN>.",
+          operationId: "listNamespaces",
+          summary: "Listar sitios web y clientes disponibles",
+          description:
+            "Devuelve todos los sitios y clientes indexados en Pinecone con su conteo de vectores y slugs.",
+          parameters: [
+            {
+              name: "key",
+              in: "query",
+              required: false,
+              description: "Tu Scrapio API Key (opcional si usas cabecera Authorization)",
+              schema: { type: "string" },
+            },
+          ],
           responses: {
             "200": {
               description: "Lista de namespaces disponibles",
@@ -40,6 +84,7 @@ export async function GET(req: NextRequest) {
                           type: "object",
                           properties: {
                             name: { type: "string" },
+                            slug: { type: "string" },
                             vectorCount: { type: "integer" },
                           },
                         },
@@ -52,84 +97,12 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      "/api/namespaces": {
-        get: {
-          operationId: "listSites",
-          summary: "Listar sitios web y clientes disponibles",
-          description: "Devuelve los nombres de los sitios scrapeados (namespaces) y cuántos vectores de conocimiento tienen.",
-          responses: {
-            "200": {
-              description: "Lista de namespaces disponibles",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      totalVectors: { type: "integer" },
-                      namespaces: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            name: { type: "string" },
-                            vectorCount: { type: "integer" },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/entities": {
-        get: {
-          operationId: "getSiteEntities",
-          summary: "Extraer entidades SEO de un sitio web",
-          description: "Analiza el contenido del sitio web scrapeado y devuelve un informe estructurado de entidades: marcas, productos, servicios, personas, ubicaciones y esquema Schema.org.",
-          parameters: [
-            {
-              name: "namespace",
-              in: "query",
-              required: true,
-              description: "El nombre del cliente o namespace a analizar (ej. cliente-avafin)",
-              schema: { type: "string" },
-            },
-            {
-              name: "aiProvider",
-              in: "query",
-              required: false,
-              description: "Proveedor de IA a usar: 'gemini' u 'openai'",
-              schema: { type: "string", enum: ["gemini", "openai"] },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Análisis completo de entidades SEO",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      namespace: { type: "string" },
-                      analysis: { type: "string" },
-                      sources: { type: "array", items: { type: "string" } },
-                      chunksAnalyzed: { type: "integer" },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/chat": {
+      "/api/v1/query": {
         post: {
           operationId: "querySiteContent",
-          summary: "Hacer una pregunta específica al contenido del sitio",
-          description: "Consulta mediante RAG semántico los textos del sitio y responde basándose exclusivamente en el contenido.",
+          summary: "Consultar conocimiento con RAG semántico",
+          description:
+            "Realiza una búsqueda semántica de vectores en Pinecone y genera una respuesta contextualizada utilizando IA con fuentes citadas.",
           requestBody: {
             required: true,
             content: {
@@ -138,9 +111,25 @@ export async function GET(req: NextRequest) {
                   type: "object",
                   required: ["query", "namespace"],
                   properties: {
-                    query: { type: "string", description: "La pregunta o tarea a responder" },
-                    namespace: { type: "string", description: "El namespace del cliente o sitio web" },
-                    aiProvider: { type: "string", enum: ["gemini", "openai"], default: "gemini" },
+                    query: {
+                      type: "string",
+                      description: "Pregunta o tema a consultar (ej. '¿Cuáles son los precios?')",
+                    },
+                    namespace: {
+                      type: "string",
+                      description: "El nombre o slug del sitio a consultar (ej. 'Internexa', 'Avafin', 'Tivit')",
+                    },
+                    topK: {
+                      type: "integer",
+                      default: 6,
+                      description: "Cantidad de fragmentos semánticos a recuperar",
+                    },
+                    aiProvider: {
+                      type: "string",
+                      enum: ["gemini", "openai"],
+                      default: "gemini",
+                      description: "Motor de IA para sintetizar la respuesta",
+                    },
                   },
                 },
               },
@@ -148,18 +137,101 @@ export async function GET(req: NextRequest) {
           },
           responses: {
             "200": {
-              description: "Respuesta generada con fuentes citadas",
+              description: "Respuesta sintetizada con fuentes citadas",
               content: {
                 "application/json": {
                   schema: {
                     type: "object",
                     properties: {
+                      status: { type: "string" },
+                      query: { type: "string" },
+                      namespace: { type: "string" },
                       answer: { type: "string" },
                       sources: { type: "array", items: { type: "string" } },
+                      chunks: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            url: { type: "string" },
+                            score: { type: "number" },
+                            h1: { type: "string" },
+                            snippet: { type: "string" },
+                          },
+                        },
+                      },
                     },
                   },
                 },
               },
+            },
+          },
+        },
+        get: {
+          operationId: "querySiteContentGet",
+          summary: "Consultar conocimiento con RAG vía GET",
+          description: "Permite hacer consultas rápidas mediante parámetros en la URL.",
+          parameters: [
+            {
+              name: "query",
+              in: "query",
+              required: true,
+              description: "La pregunta o tarea a responder",
+              schema: { type: "string" },
+            },
+            {
+              name: "namespace",
+              in: "query",
+              required: true,
+              description: "El sitio o cliente a consultar (ej. 'Internexa', 'Avafin')",
+              schema: { type: "string" },
+            },
+            {
+              name: "key",
+              in: "query",
+              required: false,
+              description: "Tu Scrapio API Key",
+              schema: { type: "string" },
+            },
+            {
+              name: "topK",
+              in: "query",
+              required: false,
+              schema: { type: "integer", default: 6 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Respuesta sintetizada con fuentes",
+            },
+          },
+        },
+      },
+      "/api/v1/entities": {
+        get: {
+          operationId: "getSiteEntities",
+          summary: "Extraer entidades SEO del sitio web",
+          description:
+            "Analiza el conocimiento del sitio web y extrae marcas, catálogo de productos/servicios, directivos, lugares y esquema Schema.org.",
+          parameters: [
+            {
+              name: "namespace",
+              in: "query",
+              required: true,
+              description: "El sitio o namespace a analizar (ej. 'Internexa', 'Avafin')",
+              schema: { type: "string" },
+            },
+            {
+              name: "key",
+              in: "query",
+              required: false,
+              description: "Tu Scrapio API Key",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Informe de entidades SEO estructuradas",
             },
           },
         },

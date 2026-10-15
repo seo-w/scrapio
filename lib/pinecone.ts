@@ -47,6 +47,49 @@ export async function upsertToPinecone(namespace: string, items: UpsertItem[]) {
 }
 
 /**
+ * Resuelve el nombre real del namespace en Pinecone de forma tolerante a fallos
+ * (insensible a mayúsculas/minúsculas, con o sin prefijo 'cliente-', guiones o espacios).
+ */
+export async function resolvePineconeNamespace(requestedNamespace: string): Promise<string> {
+  if (!requestedNamespace || !requestedNamespace.trim()) return requestedNamespace;
+
+  try {
+    const stats = await getIndexStats();
+    const actualNamespaces = Object.keys(stats.namespaces || {});
+
+    // 1. Coincidencia exacta
+    if (actualNamespaces.includes(requestedNamespace)) {
+      return requestedNamespace;
+    }
+
+    const clean = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/^cliente[-_]/, "")
+        .replace(/^pb[-_]/, "")
+        .replace(/[-_]/g, " ")
+        .trim();
+
+    const targetClean = clean(requestedNamespace);
+
+    // 2. Coincidencia limpia (ej. 'internexa' -> 'Internexa', 'blog-internexa' -> 'Blog internexa')
+    const matched = actualNamespaces.find((name) => clean(name) === targetClean);
+    if (matched) return matched;
+
+    // 3. Coincidencia parcial si contiene el término
+    const partialMatch = actualNamespaces.find((name) => {
+      const nClean = clean(name);
+      return nClean.includes(targetClean) || targetClean.includes(nClean);
+    });
+    if (partialMatch) return partialMatch;
+
+    return requestedNamespace;
+  } catch {
+    return requestedNamespace;
+  }
+}
+
+/**
  * Realiza una búsqueda semántica de vectores dentro de un namespace
  */
 export async function queryPinecone(
@@ -54,8 +97,9 @@ export async function queryPinecone(
   queryVector: number[],
   topK: number = 4
 ) {
+  const resolvedNs = await resolvePineconeNamespace(namespace);
   const index = getPineconeIndex();
-  const ns = index.namespace(namespace);
+  const ns = index.namespace(resolvedNs);
 
   const queryResponse = await ns.query({
     vector: queryVector,
@@ -83,8 +127,9 @@ export async function getIndexStats() {
  * Elimina todos los vectores contenidos en un namespace específico
  */
 export async function deleteNamespace(namespace: string) {
+  const resolvedNs = await resolvePineconeNamespace(namespace);
   const index = getPineconeIndex();
-  const ns = index.namespace(namespace);
+  const ns = index.namespace(resolvedNs);
   await ns.deleteAll();
   return { success: true };
 }
@@ -93,8 +138,9 @@ export async function deleteNamespace(namespace: string) {
  * Elimina todos los vectores asociados a una URL específica dentro de un namespace
  */
 export async function deleteUrlVectors(namespace: string, targetUrl: string) {
+  const resolvedNs = await resolvePineconeNamespace(namespace);
   const index = getPineconeIndex();
-  const ns = index.namespace(namespace);
+  const ns = index.namespace(resolvedNs);
 
   const queryResponse = await ns.query({
     vector: new Array(768).fill(0),

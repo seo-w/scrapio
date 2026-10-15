@@ -1881,28 +1881,56 @@ export default function Home() {
 
               {activeDocTab === "claude" && (
                 <div className="space-y-4">
+                  {/* Opción 1: Conexión Remota HTTP/SSE */}
                   <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-bold text-slate-900">Configuración MCP para Claude Desktop & Cursor</h4>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Opción 1: Servidor MCP Remoto por URL (Cursor & Claude Web)</h4>
+                        <p className="text-xs text-slate-500">Conéctate directamente sin necesidad de instalar NodeJS ni scripts locales.</p>
+                      </div>
                       <button
                         onClick={() =>
-                          copyToClipboard(`{\n  "mcpServers": {\n    "scrapio": {\n      "command": "npx",\n      "args": ["-y", "tsx", "scripts/mcp-server.ts"],\n      "env": {\n        "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",\n        "SCRAPIO_API_KEY": "${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}"\n      }\n    }\n  }\n}`)
+                          copyToClipboard(`https://scrapio-one.vercel.app/api/v1/mcp?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}`)
                         }
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar URL MCP</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
+                      https://scrapio-one.vercel.app/api/v1/mcp?key={scrapioApiKey || "sk_scrapio_default_secret_key_2026"}
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      En Cursor o clientes MCP modernos, agrega un servidor de tipo <strong>SSE / HTTP</strong> con esta URL.
+                    </p>
+                  </div>
+
+                  {/* Opción 2: claude_desktop_config.json */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">Opción 2: Configuración para Claude Desktop (`claude_desktop_config.json`)</h4>
+                        <p className="text-xs text-slate-500">Para clientes que ejecutan MCP local vía stdin/stdout.</p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(`{\n  "mcpServers": {\n    "scrapio": {\n      "command": "node",\n      "args": ["scripts/mcp-server.mjs"],\n      "env": {\n        "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",\n        "SCRAPIO_API_KEY": "${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}"\n      }\n    }\n  }\n}`)
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
                       >
                         {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>Copiar JSON</span>
                       </button>
                     </div>
-                    <p className="text-sm text-slate-600">
-                      Pega esta configuración en tu archivo <code>claude_desktop_config.json</code>:
-                    </p>
+
                     <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
                       <pre>{`{
   "mcpServers": {
     "scrapio": {
-      "command": "npx",
-      "args": ["-y", "tsx", "scripts/mcp-server.ts"],
+      "command": "node",
+      "args": ["scripts/mcp-server.mjs"],
       "env": {
         "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",
         "SCRAPIO_API_KEY": "${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}"
@@ -1910,6 +1938,12 @@ export default function Home() {
     }
   }
 }`}</pre>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                      <p className="font-semibold text-slate-900">Herramientas MCP habilitadas automáticamente:</p>
+                      <p>• <code>list_scraped_sites</code>: Obtiene todos los clientes y sitios indexados con su conteo de vectores.</p>
+                      <p>• <code>query_site</code>: Consulta preguntas y respuestas con RAG semántico citando fuentes.</p>
+                      <p>• <code>get_site_entities</code>: Extrae entidades SEO, marcas, productos, personas y Schema.org.</p>
                     </div>
                   </div>
                 </div>
