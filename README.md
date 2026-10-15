@@ -43,8 +43,9 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
   * Contadores de consultas ejecutadas para Gemini y OpenAI persistidos localmente, reflejando el volumen real de interacciones por motor.
 * **Indexación Individual Bajo Demanda (Single-URL On-Demand)**:
   * Botón directo `[▶ Indexar]` en la lista de URLs faltantes o pendientes para procesar y vectorizar cualquier página específica en 1 a 2 segundos sin disparar workflows masivos.
-* **Barra de Progreso en Vivo**:
-  * Interfaz web con barra de progreso que consulta en tiempo real el porcentaje y estado del workflow en GitHub Actions (`/api/ingest/status`).
+* **Barra de Progreso & Diagnóstico de Logs en Vivo**:
+  * Interfaz web con barra de progreso interactiva que consulta en tiempo real el porcentaje y estado del workflow en GitHub Actions (`/api/ingest/status`).
+  * **Modal de Diagnóstico y Logs**: Permite hacer clic en el indicador de estado para ver la ejecución activa, pasos del pipeline, detección de fallos o pausas por límite de cuota (Gemini 15 RPM) y botón directo a los logs completos de GitHub Actions.
 * **Extracción de Entidades SEO**:
   * Endpoint `/api/entities` para analizar y extraer entidades semánticas clave de los sitios indexados.
 * **Integración MCP & OpenAPI con Auto-Inyección de API Key**:

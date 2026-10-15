@@ -35,6 +35,8 @@ import {
   Play,
   Eye,
   EyeOff,
+  Terminal,
+  Activity,
 } from "lucide-react";
 
 interface Message {
@@ -53,11 +55,16 @@ interface NamespaceInfo {
 
 interface IngestStatus {
   isAvailable: boolean;
+  runId?: number;
+  runNumber?: number;
   status: "queued" | "in_progress" | "completed" | "idle" | "unknown";
   conclusion?: "success" | "failure" | null;
   progressPercent: number;
   currentStepName: string;
+  failedStepName?: string;
+  stepsSummary?: { name: string; status: string; conclusion: string | null }[];
   htmlUrl?: string;
+  createdAt?: string;
   updatedAt?: string;
   processedUrls?: number;
   totalUrls?: number;
@@ -376,6 +383,7 @@ export default function Home() {
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
 
   // Consultas del día diferenciadas por proveedor de IA (persistidas en localStorage)
   const [geminiQueries, setGeminiQueries] = useState(0);
@@ -1039,28 +1047,57 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live crawling chip indicator */}
+            {/* Live crawling chip indicator (clickable for logs modal) */}
             {ingestStatus?.status === "in_progress" ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-base font-semibold border border-[#FDE68A]">
+              <button
+                type="button"
+                onClick={() => setIsLogsModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-base font-semibold border border-[#FDE68A] hover:bg-amber-100 transition-colors cursor-pointer"
+                title="Rastreo en curso. Haz clic para ver detalles y logs"
+              >
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                 <span>
                   {ingestStatus.totalUrls && ingestStatus.totalUrls > 0
                     ? `1 rastreo en curso · ${ingestStatus.processedUrls || 0} de ${ingestStatus.totalUrls} URLs (${ingestStatus.progressPercent}%) · Faltan ${ingestStatus.remainingUrls ?? 0}`
                     : `1 rastreo en curso · ${ingestStatus.progressPercent}%`}
                 </span>
-              </div>
+                <Terminal className="w-4 h-4 opacity-75" />
+              </button>
+            ) : ingestStatus?.conclusion === "failure" ? (
+              <button
+                type="button"
+                onClick={() => setIsLogsModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-red-50 text-red-900 text-base font-semibold border border-red-300 hover:bg-red-100 transition-colors cursor-pointer"
+                title="El último escaneo falló. Haz clic para ver qué ocurrió y abrir logs"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                <span>Último escaneo falló · Ver logs</span>
+                <Terminal className="w-4 h-4 opacity-75" />
+              </button>
             ) : ingestStatus?.quotaExhausted ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-50 text-amber-900 text-base font-semibold border border-amber-300">
+              <button
+                type="button"
+                onClick={() => setIsLogsModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-50 text-amber-900 text-base font-semibold border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
+                title="Límite de tokens alcanzado. Haz clic para ver detalles"
+              >
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
                 <span>
-                  Límite de tokens alcanzado · {ingestStatus.processedUrls} de {ingestStatus.totalUrls} URLs indexadas · Faltan {ingestStatus.remainingUrls} en cola
+                  Límite de tokens alcanzado · {ingestStatus.processedUrls} de {ingestStatus.totalUrls} URLs indexadas
                 </span>
-              </div>
+                <Terminal className="w-4 h-4 opacity-75" />
+              </button>
             ) : (
-              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 text-emerald-800 text-base font-semibold border border-emerald-200">
+              <button
+                type="button"
+                onClick={() => setIsLogsModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 text-emerald-800 text-base font-semibold border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+                title="Listo. Haz clic para ver el registro del último escaneo y logs"
+              >
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                <span>Listo · Monitoreo activo</span>
-              </div>
+                <span>Listo · Ver logs</span>
+                <Terminal className="w-4 h-4 opacity-75" />
+              </button>
             )}
 
             {/* Engine selector pill */}
@@ -2109,6 +2146,219 @@ export default function Home() {
                 No se pudo cargar la información de URLs.
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Diagnóstico y Logs del Escáner */}
+      {isLogsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[85vh] flex flex-col">
+            <button
+              onClick={() => setIsLogsModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold">
+                <Terminal className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Diagnóstico y Logs del Escáner</h3>
+                <p className="text-base text-slate-500">
+                  Estado de ejecución en GitHub Actions e ingesta de vectores en Pinecone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-4 text-base text-slate-700">
+              {/* Tarjeta de Estado Principal */}
+              <div
+                className={`p-4 rounded-xl border ${
+                  ingestStatus?.status === "in_progress"
+                    ? "bg-amber-50 border-amber-200 text-amber-900"
+                    : ingestStatus?.conclusion === "failure"
+                    ? "bg-red-50 border-red-200 text-red-900"
+                    : ingestStatus?.quotaExhausted
+                    ? "bg-amber-50 border-amber-200 text-amber-900"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-900"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base flex items-center gap-2">
+                    {ingestStatus?.status === "in_progress" ? (
+                      <>
+                        <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span>Escaneo en curso (Ejecución #{ingestStatus?.runNumber || ""})</span>
+                      </>
+                    ) : ingestStatus?.conclusion === "failure" ? (
+                      <>
+                        <span className="w-3 h-3 rounded-full bg-red-600"></span>
+                        <span>El escaneo falló (Ejecución #{ingestStatus?.runNumber || ""})</span>
+                      </>
+                    ) : ingestStatus?.quotaExhausted ? (
+                      <>
+                        <span className="w-3 h-3 rounded-full bg-amber-600"></span>
+                        <span>Ingesta pausada por límite de cuota (Ejecución #{ingestStatus?.runNumber || ""})</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-3 h-3 rounded-full bg-emerald-600"></span>
+                        <span>Último escaneo completado con éxito (#{ingestStatus?.runNumber || ""})</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="text-xs font-mono opacity-75">
+                    {ingestStatus?.updatedAt
+                      ? new Date(ingestStatus.updatedAt).toLocaleTimeString()
+                      : ""}
+                  </span>
+                </div>
+
+                <p className="text-sm font-medium">
+                  {ingestStatus?.currentStepName || "Sin ejecuciones recientes registradas."}
+                </p>
+
+                {/* Si hubo fallo específico */}
+                {ingestStatus?.failedStepName && (
+                  <div className="mt-2 text-xs font-mono bg-red-100/80 text-red-800 p-2 rounded-lg border border-red-200">
+                    ⚠️ Error detectado en el paso: <strong>{ingestStatus.failedStepName}</strong>
+                  </div>
+                )}
+
+                {/* Si se agotó cuota */}
+                {ingestStatus?.quotaExhausted && (
+                  <div className="mt-2 text-xs bg-amber-100/90 text-amber-900 p-2.5 rounded-lg border border-amber-300 leading-relaxed">
+                    💡 <strong>Límite de Google Gemini alcanzado:</strong> La capa gratuita permite hasta 15 peticiones por minuto. El script guardó exitosamente todos los vectores generados hasta el momento. Las URLs pendientes se procesarán automáticamente cuando reanudes el escaneo.
+                  </div>
+                )}
+
+                {/* Barra de Progreso */}
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span>Progreso</span>
+                    <span>{ingestStatus?.progressPercent || 0}%</span>
+                  </div>
+                  <div className="w-full bg-black/10 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-500 ${
+                        ingestStatus?.conclusion === "failure"
+                          ? "bg-red-500"
+                          : ingestStatus?.status === "in_progress"
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${ingestStatus?.progressPercent || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Métricas de URLs */}
+                {typeof ingestStatus?.totalUrls === "number" && ingestStatus.totalUrls > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-black/10 text-center text-xs">
+                    <div>
+                      <span className="block font-bold text-sm">{ingestStatus.processedUrls || 0}</span>
+                      <span className="opacity-75">Procesadas</span>
+                    </div>
+                    <div>
+                      <span className="block font-bold text-sm">{ingestStatus.remainingUrls ?? 0}</span>
+                      <span className="opacity-75">Faltantes</span>
+                    </div>
+                    <div>
+                      <span className="block font-bold text-sm">{ingestStatus.totalUrls}</span>
+                      <span className="opacity-75">Total URLs</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pasos de GitHub Actions */}
+              {ingestStatus?.stepsSummary && ingestStatus.stepsSummary.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-slate-500" />
+                    <span>Pasos del flujo en GitHub Actions</span>
+                  </h4>
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200/80 overflow-hidden text-sm">
+                    {ingestStatus.stepsSummary.map((step, idx) => (
+                      <div key={idx} className="p-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {step.conclusion === "success" ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ) : step.conclusion === "failure" ? (
+                            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                          ) : step.status === "in_progress" ? (
+                            <Loader2 className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
+                          ) : (
+                            <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                          )}
+                          <span className={`font-medium ${step.conclusion === "failure" ? "text-red-700 font-bold" : "text-slate-700"}`}>
+                            {step.name}
+                          </span>
+                        </div>
+                        <span className="text-xs uppercase font-mono px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                          {step.conclusion || step.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Enlace y Explicación de GitHub Actions */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-3.5 flex items-center justify-between gap-3">
+                <div className="text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800 mb-0.5">Logs completos y salida de consola en vivo</p>
+                  <p>Accede directamente a la consola de ejecución de GitHub Actions para ver los logs detallados de cada URL procesada.</p>
+                </div>
+                {ingestStatus?.htmlUrl && (
+                  <a
+                    href={ingestStatus.htmlUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-2xs"
+                  >
+                    <span>Ver en GitHub</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  checkIngestStatus();
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-300 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Actualizar estado</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogsModalOpen(false);
+                    openUpdateModal();
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Reanudar / Iniciar Escaneo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLogsModalOpen(false)}
+                  className="bg-slate-200 text-slate-800 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-300 transition-colors cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

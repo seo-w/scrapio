@@ -73,41 +73,63 @@ export async function GET() {
 
     let progressPercent = 0;
     let currentStepName = "Iniciando proceso...";
+    let failedStepName: string | undefined = undefined;
+    let stepsSummary: { name: string; status: string; conclusion: string | null }[] = [];
 
     const isLiveRecent = liveProgress && Date.now() - liveProgress.updatedAt < 1000 * 60 * 10; // últimos 10 minutos
 
+    // Consultar jobs_url para obtener detalles de los pasos y detectar fallos
+    try {
+      const jobsRes = await fetch(latestRun.jobs_url, { headers, cache: "no-store" });
+      if (jobsRes.ok) {
+        const jobsData = await jobsRes.json();
+        const mainJob = jobsData.jobs?.[0];
+        if (mainJob && Array.isArray(mainJob.steps)) {
+          const steps = mainJob.steps;
+          stepsSummary = steps.map((s: any) => ({
+            name: s.name,
+            status: s.status,
+            conclusion: s.conclusion,
+          }));
+
+          const failedStep = steps.find((s: any) => s.conclusion === "failure");
+          if (failedStep) {
+            failedStepName = failedStep.name;
+          }
+
+          if (latestRun.status === "in_progress") {
+            const completedSteps = steps.filter((s: any) => s.status === "completed").length;
+            const activeStep = steps.find((s: any) => s.status === "in_progress");
+            progressPercent = Math.min(95, Math.round((completedSteps / Math.max(steps.length, 5)) * 100));
+            if (activeStep) {
+              currentStepName = `⚙️ ${activeStep.name}...`;
+            } else {
+              currentStepName = "🌐 Procesando crawler e embeddings...";
+            }
+          }
+        }
+      }
+    } catch {
+      // Continuar con valores por defecto si falla la llamada de jobs
+    }
+
     if (latestRun.status === "completed") {
       progressPercent = 100;
-      currentStepName = latestRun.conclusion === "success" 
-        ? "✅ Ingesta finalizada exitosamente" 
-        : "❌ Ingesta finalizada con error";
+      if (latestRun.conclusion === "success") {
+        currentStepName = isLiveRecent && liveProgress?.quotaExhausted
+          ? "⚠️ Ingesta pausada por límite de cuota de Gemini"
+          : "✅ Ingesta finalizada exitosamente";
+      } else {
+        currentStepName = failedStepName 
+          ? `❌ Falló en el paso: ${failedStepName}` 
+          : "❌ Ingesta finalizada con error";
+      }
     } else if (latestRun.status === "in_progress") {
       if (isLiveRecent && liveProgress!.totalUrls > 0) {
         progressPercent = Math.min(99, Math.round((liveProgress!.processedUrls / liveProgress!.totalUrls) * 100));
         currentStepName = `URL ${liveProgress!.processedUrls}/${liveProgress!.totalUrls} (${liveProgress!.currentUrl})`;
-      } else {
-        try {
-          const jobsRes = await fetch(latestRun.jobs_url, { headers, cache: "no-store" });
-          if (jobsRes.ok) {
-            const jobsData = await jobsRes.json();
-            const mainJob = jobsData.jobs?.[0];
-            if (mainJob && Array.isArray(mainJob.steps)) {
-              const steps = mainJob.steps;
-              const completedSteps = steps.filter((s: any) => s.status === "completed").length;
-              const activeStep = steps.find((s: any) => s.status === "in_progress");
-
-              progressPercent = Math.min(95, Math.round((completedSteps / Math.max(steps.length, 5)) * 100));
-              if (activeStep) {
-                currentStepName = `⚙️ ${activeStep.name}...`;
-              } else {
-                currentStepName = "🌐 Procesando crawler e embeddings...";
-              }
-            }
-          }
-        } catch {
-          progressPercent = 50;
-          currentStepName = "🌐 Ingesta en progreso en GitHub Actions...";
-        }
+      } else if (!currentStepName.startsWith("⚙️")) {
+        currentStepName = "🌐 Ingesta en progreso en GitHub Actions...";
       }
     } else {
       progressPercent = 10;
@@ -125,6 +147,8 @@ export async function GET() {
       htmlUrl: latestRun.html_url,
       progressPercent,
       currentStepName,
+      failedStepName,
+      stepsSummary,
       processedUrls: isLiveRecent ? liveProgress?.processedUrls : undefined,
       totalUrls: isLiveRecent ? liveProgress?.totalUrls : undefined,
       remainingUrls: isLiveRecent ? liveProgress?.remainingUrls : undefined,
