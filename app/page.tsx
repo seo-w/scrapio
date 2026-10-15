@@ -1631,65 +1631,72 @@ export default function Home() {
       {/* Modal: Integraciones & Conectar con LLM */}
       {isDocsModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[85vh] flex flex-col">
+          <div className="bg-white rounded-3xl border border-slate-300 w-full max-w-4xl p-7 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsDocsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center font-bold">
+            {/* Cabecera del Modal */}
+            <div className="flex items-center gap-3.5 mb-5 pr-8">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
                 <Code2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Conecta Scrapio con tu LLM Preferido</h3>
-                <p className="text-base text-slate-500">
-                  Consulta el conocimiento de {getClientDisplayName(namespace)} desde cualquier agente o IA.
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Conecta Scrapio con tu LLM Preferido</h3>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Consulta el conocimiento de <span className="font-semibold text-slate-700">{getClientDisplayName(namespace)}</span> desde cualquier agente, chat o IA.
                 </p>
               </div>
             </div>
 
-            {/* Tarjeta de Tu API Key con opción de ver y copiar */}
-            <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 mb-3 flex items-center justify-between gap-3 shadow-2xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Key className="w-4 h-4" />
+            {/* Tarjeta de Tu API Key */}
+            <div className="bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200 rounded-2xl p-4 mb-5 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tu Scrapio API Key</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium">Activa</span>
+                    </div>
+                    <p className="font-mono text-sm font-semibold text-slate-900 mt-0.5 truncate">
+                      {showApiKey ? (scrapioApiKey || "sk_scrapio_default_secret_key_2026") : "sk_scrapio_••••••••••••••••••••••••••••••••"}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tu Scrapio API Key</p>
-                  <p className="font-mono text-sm font-bold text-slate-800 truncate">
-                    {showApiKey ? (scrapioApiKey || "sk_scrapio_default_secret_key_2026") : "••••••••••••••••••••••••••••••••"}
-                  </p>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  >
+                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{showApiKey ? "Ocultar" : "Mostrar"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      copyToClipboard(scrapioApiKey || "sk_scrapio_default_secret_key_2026");
+                      setCopiedKey(true);
+                      setTimeout(() => setCopiedKey(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                  >
+                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedKey ? "Copiada" : "Copiar clave"}</span>
+                  </button>
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-                  title={showApiKey ? "Ocultar clave" : "Mostrar clave"}
-                >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    copyToClipboard(scrapioApiKey || "sk_scrapio_default_secret_key_2026");
-                    setCopiedKey(true);
-                    setTimeout(() => setCopiedKey(false), 2000);
-                  }}
-                  className="flex items-center gap-1 text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
-                >
-                  {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey ? "Copiada" : "Copiar"}</span>
-                </button>
               </div>
             </div>
 
-            {/* Selector de Pestañas */}
-            <div className="flex border-b border-slate-200 gap-1.5 mb-4 overflow-x-auto pb-1">
+            {/* Selector de Pestañas con estilo amplio tipo Segmented Control */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl mb-5 overflow-x-auto border border-slate-200/80">
               {[
                 { id: "direct", label: "💬 Prompt Directo" },
                 { id: "chatgpt", label: "🤖 Custom GPTs" },
@@ -1700,10 +1707,10 @@ export default function Home() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveDocTab(tab.id as any)}
-                  className={`text-base px-3.5 py-2 rounded-xl font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  className={`flex-1 min-w-fit px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap cursor-pointer text-center ${
                     activeDocTab === tab.id
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "text-slate-600 hover:text-slate-950 hover:bg-slate-100"
+                      ? "bg-white text-blue-600 shadow-sm border border-slate-200/60"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                   }`}
                 >
                   {tab.label}
@@ -1712,97 +1719,131 @@ export default function Home() {
             </div>
 
             {/* Contenido Dinámico por Pestaña */}
-            <div className="flex-1 overflow-y-auto pr-1 text-base space-y-4 text-slate-700">
+            <div className="flex-1 overflow-y-auto pr-2 text-slate-700 space-y-4">
               {activeDocTab === "direct" && (
                 <div className="space-y-4">
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-slate-800">
-                    <p className="font-bold text-indigo-900 flex items-center gap-2 mb-1.5 text-base">
+                  <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 text-slate-800">
+                    <p className="font-bold text-blue-950 flex items-center gap-2 mb-1 text-sm">
                       <span>✨ Conexión Inmediata Sin Configuración</span>
                     </p>
-                    <p className="text-base text-slate-700 leading-relaxed">
+                    <p className="text-sm text-slate-700 leading-relaxed">
                       Pega cualquiera de estos prompts en cualquier chat con navegación web o acceso a internet (
                       <strong>ChatGPT Plus/Team</strong>, <strong>Claude</strong>, <strong>Gemini Advanced</strong>,{" "}
                       <strong>Copilot</strong> o <strong>Perplexity</strong>). La IA consultará tu endpoint de Scrapio en vivo.
                     </p>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-900 text-base">
-                        Opción 1: Listar Sitios / Clientes (Prompt Rápido)
-                      </span>
+                  {/* Opción 1 */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm">
+                          Opción 1: Listar Sitios / Clientes (Prompt Rápido)
+                        </span>
+                        <p className="text-xs text-slate-500">Pídele al modelo que descubra los namespaces disponibles en tu cuenta.</p>
+                      </div>
                       <button
                         onClick={() =>
                           copyToClipboard(
                             `Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}. Muéstrame una lista numerada de los sitios/cliente`
                           )
                         }
-                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
                       >
-                        {copiedSnippet ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>Copiar Prompt</span>
                       </button>
                     </div>
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-emerald-900 select-all">
+
+                    <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto select-all border border-slate-800">
                       {`Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}. Muéstrame una lista numerada de los sitios/cliente`}
                     </div>
-                    <p className="text-xs text-emerald-700 font-medium mt-1.5 flex items-center gap-1">
-                      <span>✓</span> Tu API Key ya está insertada en el prompt lista para copiar y usar en Claude o tu LLM.
+                    <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Tu API Key ya está insertada en el prompt lista para copiar y usar.</span>
                     </p>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-900 text-base">
-                        Opción 2: Prompt Completo de Asistente RAG Autónomo
-                      </span>
+                  {/* Opción 2 */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm">
+                          Opción 2: Prompt Completo de Asistente RAG Autónomo
+                        </span>
+                        <p className="text-xs text-slate-500">Configura a cualquier IA como un analista experto con RAG semántico.</p>
+                      </div>
                       <button
                         onClick={() =>
                           copyToClipboard(
                             `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"} y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
                           )
                         }
-                        className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
                       >
-                        {copiedSnippet ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>Copiar Prompt Completo</span>
                       </button>
                     </div>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-base text-slate-800 whitespace-pre-line leading-relaxed select-all">
+
+                    <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-line select-all border border-slate-800">
                       {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
 1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"} y lístame los clientes/sitios web disponibles.
 2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
 3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
                     </div>
-                    <p className="text-xs text-emerald-700 font-medium mt-1.5 flex items-center gap-1">
-                      <span>✓</span> Tu API Key ya está insertada en el prompt lista para copiar y usar en Claude o tu LLM.
+                    <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Tu API Key ya está insertada en el prompt lista para copiar y usar.</span>
                     </p>
                   </div>
                 </div>
               )}
 
               {activeDocTab === "chatgpt" && (
-                <div className="space-y-3.5">
-                  <p className="text-base leading-relaxed">
-                    En ChatGPT, ve a <strong>Create a GPT &gt; Configure &gt; Actions &gt; Create new action</strong> y pega en <em>Import from URL</em>:
-                  </p>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between font-mono text-base text-blue-700">
-                    <span>https://scrapio-one.vercel.app/api/openapi.json</span>
-                    <button
-                      onClick={() => copyToClipboard("https://scrapio-one.vercel.app/api/openapi.json")}
-                      className="p-1 hover:text-blue-900 text-slate-500 cursor-pointer"
-                    >
-                      {copiedSnippet ? <Check className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5" />}
-                    </button>
+                <div className="space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <h4 className="text-sm font-bold text-slate-900">Configuración para Custom GPTs de OpenAI</h4>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      En la configuración de tu GPT, ve a <strong>Configure &gt; Actions &gt; Create new action</strong> y pega la URL en la casilla <em>Import from URL</em>:
+                    </p>
+                    <div className="bg-slate-900 text-blue-300 p-3.5 rounded-xl flex items-center justify-between font-mono text-xs sm:text-sm border border-slate-800">
+                      <span className="truncate pr-2">https://scrapio-one.vercel.app/api/openapi.json</span>
+                      <button
+                        onClick={() => copyToClipboard("https://scrapio-one.vercel.app/api/openapi.json")}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar URL</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      💡 La especificación OpenAPI incluye automáticamente las operaciones para listar sitios y consultar contenido con RAG.
+                    </p>
                   </div>
                 </div>
               )}
 
               {activeDocTab === "claude" && (
-                <div className="space-y-3.5">
-                  <p className="text-base">Configuración MCP para <code>claude_desktop_config.json</code>:</p>
-                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 relative font-mono text-base text-slate-800 overflow-x-auto">
-                    <pre>{`{
+                <div className="space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900">Configuración MCP para Claude Desktop & Cursor</h4>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(`{\n  "mcpServers": {\n    "scrapio": {\n      "command": "npx",\n      "args": ["-y", "tsx", "scripts/mcp-server.ts"],\n      "env": {\n        "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",\n        "SCRAPIO_API_KEY": "${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}"\n      }\n    }\n  }\n}`)
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar JSON</span>
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-600">
+                      Pega esta configuración en tu archivo <code>claude_desktop_config.json</code>:
+                    </p>
+                    <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
+                      <pre>{`{
   "mcpServers": {
     "scrapio": {
       "command": "npx",
@@ -1814,39 +1855,74 @@ export default function Home() {
     }
   }
 }`}</pre>
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeDocTab === "python" && (
-                <div className="space-y-3.5">
-                  <p className="text-base">Ejemplo cURL para consultar el namespace <strong>{namespace}</strong>:</p>
-                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-slate-800 overflow-x-auto">
-                    <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
+                <div className="space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900">Ejemplo cURL / API REST</h4>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" \\\n  -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${namespace}"}'`)
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                      >
+                        {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>Copiar cURL</span>
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-600">
+                      Consulta directa por terminal o script para el namespace <strong>{namespace}</strong>:
+                    </p>
+                    <div className="bg-slate-900 text-emerald-300 p-4 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
+                      <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" \\
   -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${namespace}"}'`}</pre>
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeDocTab === "n8n" && (
-                <div className="space-y-3.5">
-                  <p className="text-base">Nodo HTTP Request para n8n o Make:</p>
-                  <ul className="list-disc list-inside space-y-2 text-base text-slate-700">
-                    <li><strong>Método:</strong> POST</li>
-                    <li><strong>URL:</strong> <code>https://scrapio-one.vercel.app/api/v1/query</code></li>
-                    <li><strong>Headers:</strong> <code>Authorization: Bearer {scrapioApiKey || "sk_scrapio_default_secret_key_2026"}</code></li>
-                    <li><strong>Body:</strong> <code>{`{ "query": "{{ $json.prompt }}", "namespace": "${namespace}" }`}</code></li>
-                  </ul>
+                <div className="space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                    <h4 className="text-sm font-bold text-slate-900">Configuración Nodo HTTP Request para n8n o Make</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Método</span>
+                        <span className="font-mono font-bold text-slate-800">POST</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Endpoint</span>
+                        <span className="font-mono text-xs text-blue-600 truncate block">https://scrapio-one.vercel.app/api/v1/query</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 sm:col-span-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Header Authorization</span>
+                        <span className="font-mono text-xs text-slate-800">Authorization: Bearer {scrapioApiKey || "sk_scrapio_default_secret_key_2026"}</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 sm:col-span-2">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Body (JSON)</span>
+                        <div className="bg-slate-900 text-slate-200 p-2.5 rounded-lg font-mono text-xs">
+                          <code>{`{ "query": "{{ $json.prompt }}", "namespace": "${namespace}" }`}</code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="pt-4 border-t border-slate-200 flex justify-end">
+            {/* Pie del Modal */}
+            <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-xs text-slate-400">Scrapio RAG API v1 · Documentación Headless</span>
               <button
                 onClick={() => setIsDocsModalOpen(false)}
-                className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-base font-semibold hover:bg-slate-800 transition-colors"
+                className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors cursor-pointer shadow-xs"
               >
                 Cerrar Guía
               </button>
