@@ -35,6 +35,7 @@ import {
   Play,
   Eye,
   EyeOff,
+  Menu,
   Terminal,
   Activity,
 } from "lucide-react";
@@ -384,6 +385,7 @@ export default function Home() {
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [isPollingStatus, setIsPollingStatus] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Consultas del día diferenciadas por proveedor de IA (persistidas en localStorage)
   const [geminiQueries, setGeminiQueries] = useState(0);
@@ -767,9 +769,20 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex antialiased select-none font-sans text-slate-800 text-base" style={{ backgroundColor: "#CCD6E0", color: "#0F172A" }}>
+      {/* Backdrop overlay for mobile drawer */}
+      {isMobileSidebarOpen && (
+        <div
+          onClick={() => setIsMobileSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs lg:hidden transition-opacity"
+          aria-hidden="true"
+        />
+      )}
+
       {/* BEGIN: Sidebar */}
       <aside
-        className="w-80 bg-[#F6F8FB] border-r border-[#DCE4EC] flex flex-col justify-between shrink-0 h-screen sticky top-0 px-5 py-6 select-none"
+        className={`fixed lg:sticky top-0 z-50 lg:z-auto h-screen w-80 bg-[#F6F8FB] border-r border-[#DCE4EC] flex flex-col justify-between shrink-0 px-5 py-6 select-none transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-y-auto ${
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
         style={{ backgroundColor: "rgb(248, 250, 252)", borderRight: "1px solid rgb(203, 213, 225)" }}
       >
         {/* Top Nav Container */}
@@ -788,6 +801,15 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2">
                 <UserButton />
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  title="Cerrar menú"
+                  aria-label="Cerrar menú"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
@@ -819,7 +841,10 @@ export default function Home() {
               Contexto de cliente
             </div>
             <div
-              onClick={() => setIsClientSelectorOpen(true)}
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setIsClientSelectorOpen(true);
+              }}
               className="mt-1 bg-white border border-[#DCE4ED] rounded-xl p-3.5 shadow-xs hover:border-slate-300 transition-colors cursor-pointer group"
               style={{ backgroundColor: "rgb(255, 255, 255)", border: "1px solid rgb(226, 232, 240)" }}
             >
@@ -850,7 +875,10 @@ export default function Home() {
 
             {currentUserInfo?.isAdmin && (
               <button
-                onClick={openNewSiteModal}
+                onClick={() => {
+                  setIsMobileSidebarOpen(false);
+                  openNewSiteModal();
+                }}
                 className="mt-3 px-1 text-base font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <span className="text-lg font-normal leading-none">+</span>
@@ -865,7 +893,10 @@ export default function Home() {
               Trabajo
             </div>
             {/* Active Link: Consulta */}
-            <button className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#E0E7FF] text-[#2563EB] font-semibold text-base shadow-2xs">
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#E0E7FF] text-[#2563EB] font-semibold text-base shadow-2xs cursor-pointer"
+            >
               <div className="flex items-center gap-3">
                 <MessageSquare className="w-5 h-5 text-[#2563EB]" />
                 <span>Consulta</span>
@@ -874,7 +905,10 @@ export default function Home() {
 
             {/* Clientes */}
             <button
-              onClick={() => setIsClientSelectorOpen(true)}
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setIsClientSelectorOpen(true);
+              }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -888,7 +922,10 @@ export default function Home() {
 
             {/* Rastreos & Auditoría de URLs */}
             <button
-              onClick={() => openUrlsAudit()}
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                openUrlsAudit();
+              }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -906,7 +943,10 @@ export default function Home() {
 
             {/* Integraciones */}
             <button
-              onClick={() => setIsDocsModalOpen(true)}
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setIsDocsModalOpen(true);
+              }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -920,7 +960,10 @@ export default function Home() {
 
             {/* Mis API Keys (BYOK) */}
             <button
-              onClick={() => setIsByokModalOpen(true)}
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setIsByokModalOpen(true);
+              }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
@@ -936,6 +979,7 @@ export default function Home() {
             {currentUserInfo?.isAdmin && (
               <button
                 onClick={() => {
+                  setIsMobileSidebarOpen(false);
                   setIsAdminModalOpen(true);
                   fetchAdminUsers();
                 }}
@@ -1031,79 +1075,91 @@ export default function Home() {
       <main className="flex-1 flex flex-col min-w-0 bg-[#CCD6E0] overflow-y-auto">
         {/* Top Header Bar */}
         <header
-          className="border-b border-[#D8E1EA] px-8 py-5 flex items-center justify-between sticky top-0 z-10"
+          className="border-b border-[#D8E1EA] px-4 sm:px-6 lg:px-8 py-3.5 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sticky top-0 z-30 shadow-2xs"
           style={{
             backgroundColor: "rgb(255, 255, 255)",
             borderBottom: "1px solid rgb(203, 213, 225)",
             boxShadow: "rgba(0, 0, 0, 0.05) 0px 1px 3px 0px",
           }}
         >
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 leading-snug">Consulta</h2>
-            <p className="text-base text-slate-600 mt-0.5">
-              Respuestas sintetizadas solo desde el conocimiento indexado de{" "}
-              <span className="font-bold text-slate-800">{getClientDisplayName(namespace)}</span>.
-            </p>
+          <div className="flex items-center gap-3">
+            {/* Mobile hamburger menu toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer shrink-0 transition-colors"
+              title="Abrir menú"
+              aria-label="Abrir menú"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">Consulta</h2>
+              <p className="text-xs sm:text-base text-slate-600 mt-0.5 line-clamp-1 sm:line-clamp-none">
+                Respuestas sintetizadas solo desde el conocimiento indexado de{" "}
+                <span className="font-bold text-slate-800">{getClientDisplayName(namespace)}</span>.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {/* Live crawling chip indicator (clickable for logs modal) */}
             {ingestStatus?.status === "in_progress" ? (
               <button
                 type="button"
                 onClick={() => setIsLogsModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-base font-semibold border border-[#FDE68A] hover:bg-amber-100 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-[#FEF3C7]/90 text-[#92400E] text-xs sm:text-base font-semibold border border-[#FDE68A] hover:bg-amber-100 transition-colors cursor-pointer"
                 title="Rastreo en curso. Haz clic para ver detalles y logs"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                 <span>
                   {ingestStatus.totalUrls && ingestStatus.totalUrls > 0
-                    ? `1 rastreo en curso · ${ingestStatus.processedUrls || 0} de ${ingestStatus.totalUrls} URLs (${ingestStatus.progressPercent}%) · Faltan ${ingestStatus.remainingUrls ?? 0}`
-                    : `1 rastreo en curso · ${ingestStatus.progressPercent}%`}
+                    ? `1 en curso · ${ingestStatus.processedUrls || 0}/${ingestStatus.totalUrls} (${ingestStatus.progressPercent}%)`
+                    : `1 en curso · ${ingestStatus.progressPercent}%`}
                 </span>
-                <Terminal className="w-4 h-4 opacity-75" />
+                <Terminal className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-75" />
               </button>
             ) : ingestStatus?.conclusion === "failure" ? (
               <button
                 type="button"
                 onClick={() => setIsLogsModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-red-50 text-red-900 text-base font-semibold border border-red-300 hover:bg-red-100 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-red-50 text-red-900 text-xs sm:text-base font-semibold border border-red-300 hover:bg-red-100 transition-colors cursor-pointer"
                 title="El último escaneo falló. Haz clic para ver qué ocurrió y abrir logs"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
-                <span>Último escaneo falló · Ver logs</span>
-                <Terminal className="w-4 h-4 opacity-75" />
+                <span>Falló · Ver logs</span>
+                <Terminal className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-75" />
               </button>
             ) : ingestStatus?.quotaExhausted ? (
               <button
                 type="button"
                 onClick={() => setIsLogsModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-50 text-amber-900 text-base font-semibold border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-amber-50 text-amber-900 text-xs sm:text-base font-semibold border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
                 title="Límite de tokens alcanzado. Haz clic para ver detalles"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
                 <span>
-                  Límite de tokens alcanzado · {ingestStatus.processedUrls} de {ingestStatus.totalUrls} URLs indexadas
+                  Límite alcanzado · {ingestStatus.processedUrls}/{ingestStatus.totalUrls} URLs
                 </span>
-                <Terminal className="w-4 h-4 opacity-75" />
+                <Terminal className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-75" />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setIsLogsModalOpen(true)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 text-emerald-800 text-base font-semibold border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-emerald-50 text-emerald-800 text-xs sm:text-base font-semibold border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
                 title="Listo. Haz clic para ver el registro del último escaneo y logs"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                 <span>Listo · Ver logs</span>
-                <Terminal className="w-4 h-4 opacity-75" />
+                <Terminal className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-75" />
               </button>
             )}
 
             {/* Engine selector pill */}
             <div
               onClick={() => setAiProvider(aiProvider === "gemini" ? "openai" : "gemini")}
-              className="bg-white border border-[#94A3B8] px-4 py-2 rounded-xl text-base font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 cursor-pointer transition-colors"
+              className="bg-white border border-[#94A3B8] px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-base font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 cursor-pointer transition-colors"
               title="Haz clic para alternar entre Gemini y OpenAI"
             >
               Motor: {aiProvider === "gemini" ? "Gemini" : "OpenAI"}
@@ -1112,7 +1168,7 @@ export default function Home() {
             {/* Primary crawl trigger button */}
             <button
               onClick={openUpdateModal}
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-xl text-base font-semibold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-3.5 sm:px-5 py-1.5 sm:py-2 rounded-xl text-xs sm:text-base font-semibold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
             >
               <span>Rastrear sitio</span>
             </button>
@@ -1120,44 +1176,44 @@ export default function Home() {
         </header>
 
         {/* Content Workspace */}
-        <div className="max-w-6xl w-full mx-auto px-8 py-6 flex-1 flex flex-col space-y-6">
+        <div className="max-w-6xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 flex flex-col space-y-4 sm:space-y-6">
           {/* Active Namespace Subheader Banner */}
           <section
-            className="bg-white border border-[#94A3B8] rounded-xl px-5 py-3 flex items-center justify-between shadow-2xs"
+            className="bg-white border border-[#94A3B8] rounded-xl px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs"
             data-purpose="namespace-bar"
           >
-            <div className="flex items-center gap-3 text-base">
-              <span className="bg-[#EEF2FF] text-[#4F46E5] font-bold text-base px-3 py-1 rounded-md border border-indigo-200">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base">
+              <span className="bg-[#EEF2FF] text-[#4F46E5] font-bold text-xs sm:text-base px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-md border border-indigo-200">
                 Namespace aislado
               </span>
-              <span className="font-mono text-slate-900 font-bold">{namespace}</span>
-              <span className="text-slate-400">·</span>
-              <span className="text-slate-600">
+              <span className="font-mono text-slate-900 font-bold truncate max-w-[130px] sm:max-w-none">{namespace}</span>
+              <span className="text-slate-400 hidden sm:inline">·</span>
+              <span className="text-slate-600 text-xs sm:text-base">
                 {Math.round(activeVectors / 15) || 120} páginas · {activeVectors.toLocaleString()} vectores
               </span>
-              <span className="text-slate-400">·</span>
+              <span className="text-slate-400 hidden sm:inline">·</span>
               <button
                 onClick={() => openUrlsAudit()}
-                className="text-base font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1.5"
+                className="text-xs sm:text-base font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1.5"
                 title="Ver lista de URLs indexadas vs las que faltan por rastrear"
               >
-                <span>🔍 Ver URLs escaneadas vs faltantes</span>
+                <span>🔍 Ver URLs</span>
               </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {messages.length > 1 && (
                 <button
                   onClick={handleClearChat}
                   title="Limpiar conversación actual"
-                  className="text-base text-slate-500 hover:text-red-600 border border-[#DCE4ED] bg-white px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="text-xs sm:text-base text-slate-500 hover:text-red-600 border border-[#DCE4ED] bg-white px-2.5 sm:px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Limpiar chat</span>
+                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>Limpiar</span>
                 </button>
               )}
               <button
                 onClick={() => setIsClientSelectorOpen(true)}
-                className="text-base font-semibold text-slate-800 hover:text-slate-950 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-4 py-1.5 rounded-xl transition-colors cursor-pointer"
+                className="text-xs sm:text-base font-semibold text-slate-800 hover:text-slate-950 border border-[#DCE4ED] bg-slate-50 hover:bg-white px-3 sm:px-4 py-1.5 rounded-xl transition-colors cursor-pointer"
               >
                 Cambiar cliente
               </button>
@@ -1165,12 +1221,12 @@ export default function Home() {
           </section>
 
           {/* Chat Thread Section */}
-          <section className="space-y-6 flex-1" data-purpose="chat-thread">
+          <section className="space-y-4 sm:space-y-6 flex-1" data-purpose="chat-thread">
             {messages.map((msg) => {
               if (msg.role === "user") {
                 return (
                   <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-2xl bg-[#1E293B] text-white text-base px-5 py-3 rounded-2xl rounded-tr-xs shadow-sm font-normal leading-relaxed">
+                    <div className="max-w-[90%] sm:max-w-2xl bg-[#1E293B] text-white text-sm sm:text-base px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl rounded-tr-xs shadow-sm font-normal leading-relaxed break-words">
                       {msg.content}
                     </div>
                   </div>
@@ -1180,61 +1236,63 @@ export default function Home() {
               return (
                 <article
                   key={msg.id}
-                  className="bg-white border border-[#94A3B8] rounded-2xl p-6 shadow-2xs space-y-5"
+                  className="bg-white border border-[#94A3B8] rounded-2xl p-4 sm:p-6 shadow-2xs space-y-4 sm:space-y-5 overflow-hidden"
                   data-purpose="assistant-response"
                 >
                   {/* Card Header info */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-base flex items-center justify-center">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-sm sm:text-base flex items-center justify-center shrink-0">
                         S
                       </div>
-                      <span className="font-bold text-base text-slate-900">Scrapio</span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-base font-semibold border border-emerald-200">
-                        {msg.sources && msg.sources.length > 0 ? `${msg.sources.length} fuentes verificadas` : "Base RAG"}
+                      <span className="font-bold text-sm sm:text-base text-slate-900">Scrapio</span>
+                      <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs sm:text-base font-semibold border border-emerald-200">
+                        {msg.sources && msg.sources.length > 0 ? `${msg.sources.length} fuentes` : "Base RAG"}
                       </span>
                     </div>
-                    <div className="text-base text-slate-500 font-mono">
+                    <div className="text-xs sm:text-base text-slate-500 font-mono">
                       {msg.tokens || 1284} tokens · {msg.duration || "1,9 s"}
                     </div>
                   </div>
 
                   {/* Synthesized Answer Text */}
-                  {renderMessageContent(msg.content)}
+                  <div className="overflow-x-auto">
+                    {renderMessageContent(msg.content)}
+                  </div>
 
                   {/* Evidence & Indexed Pages Section */}
                   {msg.sources && msg.sources.length > 0 && (
                     <div className="pt-2">
-                      <div className="text-base font-bold text-slate-500 uppercase tracking-wider mb-3">
+                      <div className="text-xs sm:text-base font-bold text-slate-500 uppercase tracking-wider mb-2.5">
                         Evidencia · Páginas indexadas consultadas
                       </div>
-                      <div className="space-y-2.5">
+                      <div className="space-y-2 sm:space-y-2.5">
                         {msg.sources.map((url, idx) => {
                           const score = (0.93 - idx * 0.04).toFixed(2);
                           return (
                             <div
                               key={idx}
-                              className="flex items-center justify-between p-3.5 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all bg-[#EEF3F8]"
+                              className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-3.5 rounded-xl border border-[#cbd5e1] hover:border-slate-400 hover:bg-[#dfe7f1] transition-all bg-[#EEF3F8] gap-2"
                             >
-                              <div className="flex items-start gap-3">
-                                <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-800 text-base font-bold flex items-center justify-center shrink-0 border border-emerald-200">
+                              <div className="flex items-start gap-2.5 sm:gap-3 overflow-hidden">
+                                <span className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-800 text-xs sm:text-base font-bold flex items-center justify-center shrink-0 border border-emerald-200 mt-0.5 sm:mt-0">
                                   {idx + 1}
                                 </span>
-                                <div>
-                                  <h4 className="text-base font-bold text-slate-900 leading-snug">
+                                <div className="overflow-hidden">
+                                  <h4 className="text-sm sm:text-base font-bold text-slate-900 leading-snug truncate">
                                     {extractTitleFromUrl(url)}
                                   </h4>
                                   <a
                                     href={url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-base font-mono text-slate-600 hover:text-blue-700 hover:underline mt-1 block"
+                                    className="text-xs sm:text-base font-mono text-slate-600 hover:text-blue-700 hover:underline mt-0.5 block truncate"
                                   >
                                     {formatUrlDisplay(url)}
                                   </a>
                                 </div>
                               </div>
-                              <div className="text-base font-mono font-bold text-slate-800 bg-slate-200/80 px-2.5 py-1 rounded-lg">
+                              <div className="text-xs sm:text-base font-mono font-bold text-slate-800 bg-slate-200/80 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg self-end sm:self-auto shrink-0">
                                 {score}
                               </div>
                             </div>
@@ -1243,19 +1301,19 @@ export default function Home() {
                       </div>
 
                       {/* Action buttons inside response */}
-                      <div className="flex items-center gap-2.5 mt-4 pt-2">
+                      <div className="flex flex-wrap items-center gap-2 mt-3 pt-2">
                         <button
                           onClick={() => copyMessageContent(msg.id, msg.content, msg.sources)}
-                          className="px-3.5 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="px-3 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs sm:text-base font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          {copiedMsgId === msg.id ? <Check className="w-4 h-4 text-emerald-600" /> : null}
+                          {copiedMsgId === msg.id ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" /> : null}
                           <span>{copiedMsgId === msg.id ? "Copiado" : "Copiar con citas"}</span>
                         </button>
                         <button
                           onClick={() => exportToMarkdown(msg.content, msg.sources)}
-                          className="px-3.5 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="px-3 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs sm:text-base font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span>Exportar a Markdown</span>
                         </button>
                         <button
@@ -1269,9 +1327,9 @@ export default function Home() {
                             );
                             setIsFragmentsModalOpen(true);
                           }}
-                          className="px-3.5 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-semibold transition-colors cursor-pointer"
+                          className="px-3 py-1.5 text-slate-700 hover:text-slate-950 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs sm:text-base font-semibold transition-colors cursor-pointer"
                         >
-                          Ver fragmentos recuperados
+                          Ver fragmentos
                         </button>
                       </div>
                     </div>
@@ -1281,18 +1339,18 @@ export default function Home() {
             })}
 
             {isLoading && (
-              <div className="bg-white border border-[#94A3B8] rounded-2xl p-6 shadow-2xs space-y-3 animate-pulse">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-base flex items-center justify-center">
+              <div className="bg-white border border-[#94A3B8] rounded-2xl p-4 sm:p-6 shadow-2xs space-y-3 animate-pulse">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-sm sm:text-base flex items-center justify-center">
                     S
                   </div>
-                  <span className="font-bold text-base text-slate-900">Scrapio RAG</span>
-                  <span className="text-base text-slate-600">
+                  <span className="font-bold text-sm sm:text-base text-slate-900">Scrapio RAG</span>
+                  <span className="text-xs sm:text-base text-slate-600">
                     Consultando vectores en namespace <strong className="font-mono font-bold text-slate-900">{namespace}</strong>...
                   </span>
                 </div>
-                <div className="h-5 bg-slate-100 rounded w-3/4"></div>
-                <div className="h-5 bg-slate-100 rounded w-1/2"></div>
+                <div className="h-4 sm:h-5 bg-slate-100 rounded w-3/4"></div>
+                <div className="h-4 sm:h-5 bg-slate-100 rounded w-1/2"></div>
               </div>
             )}
           </section>
@@ -1302,7 +1360,7 @@ export default function Home() {
             {/* Prompt Box */}
             <form
               onSubmit={handleSubmit}
-              className="bg-white border border-[#94A3B8] rounded-2xl p-4 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all"
+              className="bg-white border border-[#94A3B8] rounded-2xl p-3 sm:p-4 shadow-sm focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all"
             >
               <textarea
                 value={inputQuery}
@@ -1313,20 +1371,20 @@ export default function Home() {
                     handleSubmit();
                   }
                 }}
-                className="w-full border-0 p-0 text-base text-slate-900 placeholder-slate-400 focus:ring-0 resize-none font-normal leading-relaxed outline-none"
+                className="w-full border-0 p-0 text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:ring-0 resize-none font-normal leading-relaxed outline-none"
                 placeholder={`Pregunta sobre precios, políticas, servicios o cualquier contenido indexado de ${getClientDisplayName(namespace)}...`}
                 rows={2}
                 style={{ backgroundColor: "transparent" }}
               />
 
-              <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-100 flex-wrap gap-3">
+              <div className="flex items-center justify-between pt-2.5 sm:pt-3 mt-1 border-t border-slate-100 flex-wrap gap-2 sm:gap-3">
                 {/* Filter parameter pills: Both models visible and clickable */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-base font-semibold text-slate-500 mr-1">Modelo:</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="text-xs sm:text-base font-semibold text-slate-500 mr-1 hidden sm:inline">Modelo:</span>
                   <button
                     type="button"
                     onClick={() => setAiProvider("gemini")}
-                    className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border text-xs sm:text-base font-semibold transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 ${
                       aiProvider === "gemini"
                         ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
                         : "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
@@ -1334,11 +1392,11 @@ export default function Home() {
                   >
                     <span>Gemini 3.8 Flash</span>
                     {customGeminiKey.trim() && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
+                      <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
                         BYOK
                       </span>
                     )}
-                    {aiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-white"></span>}
+                    {aiProvider === "gemini" && <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></span>}
                   </button>
 
                   {(() => {
@@ -1363,7 +1421,7 @@ export default function Home() {
                             ? "Modelo OpenAI GPT-4o Mini disponible"
                             : "Restringido por el administrador. Haz clic para ingresar tu propia API Key (BYOK) y desbloquearlo."
                         }
-                        className={`px-3.5 py-1.5 rounded-xl border text-base font-semibold transition-all cursor-pointer flex items-center gap-2 ${
+                        className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border text-xs sm:text-base font-semibold transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 ${
                           aiProvider === "openai"
                             ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
                             : hasAccess
@@ -1371,19 +1429,19 @@ export default function Home() {
                             : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200/60"
                         }`}
                       >
-                        {!hasAccess && <Lock className="w-3.5 h-3.5 text-slate-400" />}
+                        {!hasAccess && <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />}
                         <span>OpenAI GPT-4o Mini</span>
                         {customOpenaiKey.trim() && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
+                          <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
                             BYOK
                           </span>
                         )}
                         {!hasAccess && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">
-                            Requiere Key
+                          <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">
+                            Key
                           </span>
                         )}
-                        {aiProvider === "openai" && <span className="w-2 h-2 rounded-full bg-white"></span>}
+                        {aiProvider === "openai" && <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></span>}
                       </button>
                     );
                   })()}
@@ -1391,29 +1449,26 @@ export default function Home() {
                   <button
                     type="button"
                     title="Top-K: Cantidad de fragmentos más relevantes recuperados de Pinecone para alimentar el contexto de la IA (6 fragmentos)"
-                    className="px-3.5 py-1.5 rounded-xl border border-[#DCE4ED] bg-slate-50 text-base font-semibold text-slate-700 hover:bg-white transition-colors cursor-help"
+                    className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border border-[#DCE4ED] bg-slate-50 text-xs sm:text-base font-semibold text-slate-700 hover:bg-white transition-colors cursor-help"
                   >
                     Top-K 6
                   </button>
-                  <span className="text-base text-slate-500 hidden xl:inline ml-1 font-normal">
-                    Solo responde con evidencia del namespace activo
-                  </span>
                 </div>
 
                 {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={isLoading || !inputQuery.trim()}
-                  className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white text-base font-semibold px-5 py-2 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                  className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white text-xs sm:text-base font-semibold px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer ml-auto"
                 >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {isLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : null}
                   <span>Enviar</span>
                 </button>
               </div>
             </form>
 
             {/* Quick Prompt Chips / Suggestions */}
-            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 text-base">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs sm:text-base scrollbar-none">
               {[
                 "Resume los servicios",
                 "Lista de precios publicados",
@@ -1424,7 +1479,7 @@ export default function Home() {
                   key={idx}
                   type="button"
                   onClick={() => handleSubmit(undefined, suggestion)}
-                  className="whitespace-nowrap px-4 py-2 rounded-xl border border-[#94A3B8] text-slate-800 hover:bg-slate-50 text-base font-medium shadow-2xs transition-colors cursor-pointer bg-white"
+                  className="whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-[#94A3B8] text-slate-800 hover:bg-slate-50 text-xs sm:text-base font-medium shadow-2xs transition-colors cursor-pointer bg-white shrink-0"
                 >
                   {suggestion}
                 </button>
@@ -1437,32 +1492,32 @@ export default function Home() {
 
       {/* Modal: Cambiar Cliente / Administrar Namespaces */}
       {isClientSelectorOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-4 sm:p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsClientSelectorOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
-                <Database className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-4 shrink-0 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+                <Database className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Seleccionar Espacio de Cliente</h3>
-                <p className="text-base text-slate-500">Alterna entre los sitios web aislados en Pinecone.</p>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Seleccionar Espacio de Cliente</h3>
+                <p className="text-xs sm:text-base text-slate-500">Alterna entre los sitios web aislados en Pinecone.</p>
               </div>
             </div>
 
-            <div className="max-h-80 overflow-y-auto space-y-2.5 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
               {availableNamespaces.map((ns) => {
                 const isSelected = ns.name === namespace;
                 return (
                   <div
                     key={ns.name}
-                    className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border transition-all cursor-pointer ${
                       isSelected
                         ? "bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-200"
                         : "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
@@ -1472,21 +1527,21 @@ export default function Home() {
                       setIsClientSelectorOpen(false);
                     }}
                   >
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-bold text-base flex items-center justify-center shrink-0">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900 text-white font-bold text-sm sm:text-base flex items-center justify-center shrink-0">
                         {getClientInitials(ns.name)}
                       </div>
-                      <div>
-                        <div className="text-base font-bold text-slate-900">{getClientDisplayName(ns.name)}</div>
-                        <div className="text-base font-mono text-slate-500">
+                      <div className="overflow-hidden">
+                        <div className="text-sm sm:text-base font-bold text-slate-900 truncate">{getClientDisplayName(ns.name)}</div>
+                        <div className="text-xs sm:text-base font-mono text-slate-500 truncate">
                           {ns.name} · {ns.vectorCount.toLocaleString()} vectores
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                       {isSelected ? (
-                        <span className="text-base font-semibold text-indigo-700 bg-white px-2.5 py-1 rounded-md border border-indigo-200">
+                        <span className="text-xs sm:text-base font-semibold text-indigo-700 bg-white px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md border border-indigo-200">
                           Activo
                         </span>
                       ) : null}
@@ -1496,9 +1551,9 @@ export default function Home() {
                           handleDeleteNamespace(ns.name);
                         }}
                         title="Eliminar namespace de Pinecone"
-                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                        className="p-1.5 sm:p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                       </button>
                     </div>
                   </div>
@@ -1506,19 +1561,19 @@ export default function Home() {
               })}
             </div>
 
-            <div className="pt-4 mt-3 border-t border-slate-200 flex justify-between items-center">
+            <div className="pt-3 sm:pt-4 mt-2 sm:mt-3 border-t border-slate-200 flex justify-between items-center shrink-0">
               <button
                 onClick={() => {
                   setIsClientSelectorOpen(false);
                   openNewSiteModal();
                 }}
-                className="text-base font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                className="text-xs sm:text-base font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 <span>+ Agregar nuevo cliente</span>
               </button>
               <button
                 onClick={() => setIsClientSelectorOpen(false)}
-                className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+                className="bg-slate-900 text-white text-xs sm:text-base font-semibold px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 Cerrar
               </button>
@@ -1529,28 +1584,28 @@ export default function Home() {
 
       {/* Modal: Rastrear / Nuevo Sitio */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-4 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold">
-                <RefreshCw className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-4 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Rastrear o Crear Espacio de Cliente</h3>
-                <p className="text-base text-slate-500">Envía la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}.</p>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Rastrear o Crear Espacio de Cliente</h3>
+                <p className="text-xs sm:text-base text-slate-500">Envía la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}.</p>
               </div>
             </div>
 
-            <form onSubmit={handleStartScan} className="space-y-4">
+            <form onSubmit={handleStartScan} className="space-y-3.5 sm:space-y-4">
               <div>
-                <label className="block text-base font-semibold text-slate-800 mb-1.5">
+                <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-1">
                   Namespace / Identificador del Cliente
                 </label>
                 <input
@@ -1560,12 +1615,12 @@ export default function Home() {
                   value={scanNamespace}
                   onChange={(e) => setScanNamespace(e.target.value)}
                   placeholder="ej. cliente-avafin o personalbliss"
-                  className="w-full bg-slate-50 text-base text-slate-900 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 text-sm sm:text-base text-slate-900 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-base font-semibold text-slate-800 mb-1.5">
+                <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-1">
                   URL Base a Escanear
                 </label>
                 <input
@@ -1575,12 +1630,12 @@ export default function Home() {
                   value={scanUrl}
                   onChange={(e) => setScanUrl(e.target.value)}
                   placeholder="https://ejemplo.com"
-                  className="w-full bg-slate-50 text-base text-slate-900 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 text-sm sm:text-base text-slate-900 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-base font-semibold text-slate-800 mb-1.5">
+                <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-1">
                   Máximo de Páginas a Rastrear
                 </label>
                 <input
@@ -1590,13 +1645,13 @@ export default function Home() {
                   disabled={scanStatus?.type === "success"}
                   value={scanMaxPages}
                   onChange={(e) => setScanMaxPages(e.target.value)}
-                  className="w-full bg-slate-50 text-base text-slate-900 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-slate-50 text-sm sm:text-base text-slate-900 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
 
               {scanStatus && (
                 <div
-                  className={`p-3.5 rounded-xl text-base border ${
+                  className={`p-3 sm:p-3.5 rounded-xl text-xs sm:text-base border ${
                     scanStatus.type === "success"
                       ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                       : "bg-red-50 text-red-800 border-red-200"
@@ -1606,20 +1661,20 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="pt-2 flex justify-end gap-3">
+              <div className="pt-2 flex justify-end gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-base font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 rounded-xl"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-base font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isScanning}
-                  className="px-6 py-2.5 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center gap-2 shadow-sm"
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center gap-2 shadow-sm cursor-pointer"
                 >
-                  {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {isScanning ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : null}
                   <span>{isScanning ? "Enviando..." : "Iniciar Rastreo"}</span>
                 </button>
               </div>
@@ -1630,23 +1685,23 @@ export default function Home() {
 
       {/* Modal: Integraciones & Conectar con LLM */}
       {isDocsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-300 w-full max-w-4xl p-7 shadow-2xl relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-300 w-full max-w-4xl p-4 sm:p-7 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsDocsModalOpen(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
+              className="absolute top-4 sm:top-5 right-4 sm:right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
             {/* Cabecera del Modal */}
-            <div className="flex items-center gap-3.5 mb-5 pr-8">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
-                <Code2 className="w-6 h-6" />
+            <div className="flex items-center gap-3 sm:gap-3.5 mb-4 sm:mb-5 pr-8 shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+                <Code2 className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">Conecta Scrapio con tu LLM Preferido</h3>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Conecta Scrapio con tu LLM Preferido</h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
                   Consulta el conocimiento de <span className="font-semibold text-slate-700">{getClientDisplayName(namespace)}</span> desde cualquier agente, chat o IA.
                 </p>
               </div>
@@ -1933,33 +1988,33 @@ export default function Home() {
 
       {/* Modal: Ver Fragmentos Recuperados */}
       {isFragmentsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-xl p-4 sm:p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsFragmentsModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
-            <h3 className="text-xl font-bold text-slate-900 mb-1">Fragmentos Vectoriales Recuperados</h3>
-            <p className="text-base text-slate-500 mb-4">Evidencia semántica coincidente para {namespace}:</p>
-            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-1 pr-8">Fragmentos Vectoriales Recuperados</h3>
+            <p className="text-xs sm:text-base text-slate-500 mb-4">Evidencia semántica coincidente para {namespace}:</p>
+            <div className="space-y-2.5 sm:space-y-3 flex-1 overflow-y-auto pr-1">
               {activeFragments.map((f, i) => (
-                <div key={i} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-base">
+                <div key={i} className="p-3 sm:p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs sm:text-base">
                   <div className="flex justify-between font-bold text-slate-900 mb-1">
-                    <span>{f.title}</span>
-                    <span className="font-mono text-blue-600">{f.score}</span>
+                    <span className="truncate pr-2">{f.title}</span>
+                    <span className="font-mono text-blue-600 shrink-0">{f.score}</span>
                   </div>
-                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-base text-slate-500 truncate block hover:underline">
+                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-xs sm:text-base text-slate-500 truncate block hover:underline">
                     {f.url}
                   </a>
                 </div>
               ))}
             </div>
-            <div className="pt-4 mt-2 border-t border-slate-200 flex justify-end">
+            <div className="pt-3 sm:pt-4 mt-2 border-t border-slate-200 flex justify-end shrink-0">
               <button
                 onClick={() => setIsFragmentsModalOpen(false)}
-                className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl"
+                className="bg-slate-900 text-white text-xs sm:text-base font-semibold px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl cursor-pointer"
               >
                 Cerrar
               </button>
@@ -1970,24 +2025,24 @@ export default function Home() {
 
       {/* Modal: Auditoría de URLs escaneadas vs faltantes */}
       {isUrlsAuditModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[88vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-4 sm:p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsUrlsAuditModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold">
-                <Globe className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-3 shrink-0 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                <Globe className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">
                   Auditoría de URLs · {getClientDisplayName(urlsAuditData?.namespace || namespace)}
                 </h3>
-                <p className="text-base text-slate-500">
+                <p className="text-xs sm:text-base text-slate-500">
                   URLs vectorizadas en Pinecone vs pendientes por rastrear en {urlsAuditData?.domain || "el dominio"}.
                 </p>
               </div>
@@ -2228,22 +2283,22 @@ export default function Home() {
 
       {/* Modal: Diagnóstico y Logs del Escáner */}
       {isLogsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-6 shadow-2xl relative max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-2xl p-4 sm:p-6 shadow-2xl relative max-h-[88vh] flex flex-col">
             <button
               onClick={() => setIsLogsModalOpen(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold">
-                <Terminal className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-4 shrink-0 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shrink-0">
+                <Terminal className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Diagnóstico y Logs del Escáner</h3>
-                <p className="text-base text-slate-500">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Diagnóstico y Logs del Escáner</h3>
+                <p className="text-xs sm:text-base text-slate-500">
                   Estado de ejecución en GitHub Actions e ingesta de vectores en Pinecone.
                 </p>
               </div>
@@ -2441,22 +2496,22 @@ export default function Home() {
 
       {/* Modal: Mis API Keys (BYOK) */}
       {isByokModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-6 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-lg p-4 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsByokModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold">
-                <Key className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-4 shrink-0 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                <Key className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Mis API Keys (BYOK)</h3>
-                <p className="text-base text-slate-500">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Mis API Keys (BYOK)</h3>
+                <p className="text-xs sm:text-base text-slate-500">
                   Usa tus propias credenciales para consultas ilimitadas.
                 </p>
               </div>
@@ -2547,22 +2602,22 @@ export default function Home() {
 
       {/* Modal: Panel Administrador - Gestión de Usuarios y Proyectos */}
       {isAdminModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-4xl p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl border border-slate-300 w-full max-w-4xl p-4 sm:p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsAdminModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center font-bold">
-                <Users className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-4 shrink-0 pr-8">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center font-bold shrink-0">
+                <Users className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Panel de Administración de Usuarios</h3>
-                <p className="text-base text-slate-500">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900">Panel de Administración de Usuarios</h3>
+                <p className="text-xs sm:text-base text-slate-500">
                   Asigna proyectos a cada usuario y autoriza acceso a modelos de IA. Un proyecto puede estar asignado a múltiples usuarios.
                 </p>
               </div>
