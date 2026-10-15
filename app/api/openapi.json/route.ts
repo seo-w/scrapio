@@ -19,6 +19,39 @@ export async function GET(req: NextRequest) {
       },
     ],
     paths: {
+      "/api/v1/namespaces": {
+        get: {
+          operationId: "listSitesV1",
+          summary: "Listar sitios web y clientes disponibles (Headless API)",
+          description: "Devuelve los nombres de los sitios scrapeados (namespaces) y cuántos vectores de conocimiento tienen. Requiere Authorization: Bearer <TOKEN> o parámetro ?key=<TOKEN>.",
+          responses: {
+            "200": {
+              description: "Lista de namespaces disponibles",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      totalVectors: { type: "integer" },
+                      dimension: { type: "integer" },
+                      namespaces: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name: { type: "string" },
+                            vectorCount: { type: "integer" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/namespaces": {
         get: {
           operationId: "listSites",

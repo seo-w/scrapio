@@ -8,6 +8,7 @@ import readline from "readline";
 
 // URL base de tu aplicación en Vercel (o localhost para pruebas)
 const BASE_URL = process.env.SCRAPIO_API_URL || "http://localhost:3000";
+const API_KEY = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
 
 interface JsonRpcRequest {
   jsonrpc: string;
@@ -114,7 +115,9 @@ rl.on("line", async (line) => {
 
       try {
         if (toolName === "list_scraped_sites") {
-          const res = await fetch(`${BASE_URL}/api/namespaces`);
+          const res = await fetch(`${BASE_URL}/api/v1/namespaces`, {
+            headers: { Authorization: `Bearer ${API_KEY}` },
+          });
           const data = await res.json();
           return send({
             jsonrpc: "2.0",
@@ -139,9 +142,12 @@ rl.on("line", async (line) => {
         }
 
         if (toolName === "query_site") {
-          const res = await fetch(`${BASE_URL}/api/chat`, {
+          const res = await fetch(`${BASE_URL}/api/v1/query`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${API_KEY}`,
+            },
             body: JSON.stringify({
               namespace: args.namespace,
               query: args.query,

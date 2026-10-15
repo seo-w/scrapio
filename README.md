@@ -102,7 +102,7 @@ PINECONE_INDEX_NAME=scrapio
 # Proveedor de IA por defecto (gemini | openai)
 AI_PROVIDER=gemini
 
-# Token Secreto para la API Headless (/api/v1/query)
+# Token Secreto para la API Headless (/api/v1/namespaces y /api/v1/query)
 SCRAPIO_API_KEY=un_token_secreto_personalizado
 
 # Integración GitHub REST API (para disparar ingestas desde la Web)
@@ -201,9 +201,16 @@ npm run mcp
 * **`GET ?namespace=...`**: Compara en tiempo real las URLs vectorizadas en Pinecone contra las URLs descubiertas en el sitemap XML.
 * **`DELETE ?namespace=...&url=...`**: Busca y elimina todos los vectores correspondientes a la URL especificada en el namespace sin alterar las demás páginas indexadas.
 
-### 5. Endpoint Headless con Autenticación Bearer (`POST /api/v1/query`)
-* **Headers:** `Authorization: Bearer <SCRAPIO_API_KEY>`
-* Ideal para conectar agentes de IA externos, n8n, Make y Claude Desktop sin requerir sesión de usuario interactiva.
+### 5. API Headless para LLMs y Agentes Externos (`/api/v1/*`)
+* **Autenticación:**
+  * Cabecera HTTP: `Authorization: Bearer <SCRAPIO_API_KEY>`
+  * O parámetro URL (GET): `?key=<SCRAPIO_API_KEY>` (o `?apiKey=...`)
+* **Endpoints:**
+  * **`GET /api/v1/namespaces`**: Devuelve el listado de sitios/clientes indexados y su cantidad de vectores en Pinecone. Ideal para que Claude u otros LLMs consulten los proyectos sin requerir cookies ni sesión de Clerk:
+    ```
+    https://tu-app.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY
+    ```
+  * **`POST /api/v1/query`**: Consulta RAG semántica serverless. Ideal para agentes de IA externos, n8n, Make y Claude Desktop sin requerir sesión interactiva.
 
 ### 6. Disparo de Ingesta a GitHub Actions (`POST /api/ingest`)
 * Inicia la extracción y vectorización automatizada en la nube vía GitHub REST API.
@@ -308,7 +315,9 @@ scrapio/
 │   │   ├── ingest/              # Disparo y seguimiento de GitHub Actions
 │   │   ├── namespaces/route.ts  # Listado filtrado por usuario y borrado seguro
 │   │   ├── openapi.json/route.ts# Especificación OpenAPI 3.0
-│   │   └── v1/query/route.ts    # API Headless con autenticación Bearer
+│   │   └── v1/
+│   │       ├── namespaces/route.ts # Listado headless de clientes/namespaces con API Key
+│   │       └── query/route.ts      # RAG query headless con API Key
 │   ├── globals.css              # Estilos Tailwind CSS
 │   ├── layout.tsx               # Layout principal con ClerkProvider
 │   └── page.tsx                 # UI interactiva con RBAC, BYOK y selector de modelos
