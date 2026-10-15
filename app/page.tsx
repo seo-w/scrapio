@@ -33,6 +33,8 @@ import {
   Save,
   AlertCircle,
   Play,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface Message {
@@ -362,6 +364,9 @@ export default function Home() {
   const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [scrapioApiKey, setScrapioApiKey] = useState<string>("sk_scrapio_default_secret_key_2026");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   // Estado de Ingesta / Rastreo
   const [scanUrl, setScanUrl] = useState("");
@@ -417,6 +422,9 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setCurrentUserInfo(data.user);
+        if (data.apiKey) {
+          setScrapioApiKey(data.apiKey);
+        }
       }
     } catch (err) {
       console.error("Error cargando perfil del usuario:", err);
@@ -1606,6 +1614,43 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Tarjeta de Tu API Key con opción de ver y copiar */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 mb-3 flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tu Scrapio API Key</p>
+                  <p className="font-mono text-sm font-bold text-slate-800 truncate">
+                    {showApiKey ? (scrapioApiKey || "sk_scrapio_default_secret_key_2026") : "••••••••••••••••••••••••••••••••"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                  title={showApiKey ? "Ocultar clave" : "Mostrar clave"}
+                >
+                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    copyToClipboard(scrapioApiKey || "sk_scrapio_default_secret_key_2026");
+                    setCopiedKey(true);
+                    setTimeout(() => setCopiedKey(false), 2000);
+                  }}
+                  className="flex items-center gap-1 text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedKey ? "Copiada" : "Copiar"}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Selector de Pestañas */}
             <div className="flex border-b border-slate-200 gap-1.5 mb-4 overflow-x-auto pb-1">
               {[
@@ -1652,7 +1697,7 @@ export default function Home() {
                       <button
                         onClick={() =>
                           copyToClipboard(
-                            "Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY. Muéstrame una lista numerada de los sitios/cliente"
+                            `Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}. Muéstrame una lista numerada de los sitios/cliente`
                           )
                         }
                         className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
@@ -1662,10 +1707,10 @@ export default function Home() {
                       </button>
                     </div>
                     <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-emerald-900 select-all">
-                      Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY. Muéstrame una lista numerada de los sitios/cliente
+                      {`Conéctate a mi sistema Scrapio consultando https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}. Muéstrame una lista numerada de los sitios/cliente`}
                     </div>
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      💡 Reemplaza <code>TU_SCRAPIO_API_KEY</code> por tu clave secreta de Scrapio (configurada en tu .env o Vercel).
+                    <p className="text-xs text-emerald-700 font-medium mt-1.5 flex items-center gap-1">
+                      <span>✓</span> Tu API Key ya está insertada en el prompt lista para copiar y usar en Claude o tu LLM.
                     </p>
                   </div>
 
@@ -1677,7 +1722,7 @@ export default function Home() {
                       <button
                         onClick={() =>
                           copyToClipboard(
-                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer TU_SCRAPIO_API_KEY" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
+                            `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"} y lístame los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
                           )
                         }
                         className="flex items-center gap-1.5 text-base font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
@@ -1688,12 +1733,12 @@ export default function Home() {
                     </div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 font-mono text-base text-slate-800 whitespace-pre-line leading-relaxed select-all">
                       {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
-1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=TU_SCRAPIO_API_KEY y lístame los clientes/sitios web disponibles.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer TU_SCRAPIO_API_KEY" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
+1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${scrapioApiKey || "sk_scrapio_default_secret_key_2026"} y lístame los clientes/sitios web disponibles.
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${namespace}), haz una petición POST a https://scrapio-one.vercel.app/api/v1/query con cabecera "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" y el JSON {"query": "<pregunta>", "namespace": "<namespace>"}.
 3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
                     </div>
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      💡 Reemplaza <code>TU_SCRAPIO_API_KEY</code> por tu clave secreta de Scrapio.
+                    <p className="text-xs text-emerald-700 font-medium mt-1.5 flex items-center gap-1">
+                      <span>✓</span> Tu API Key ya está insertada en el prompt lista para copiar y usar en Claude o tu LLM.
                     </p>
                   </div>
                 </div>
@@ -1727,7 +1772,7 @@ export default function Home() {
       "args": ["-y", "tsx", "scripts/mcp-server.ts"],
       "env": {
         "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",
-        "SCRAPIO_API_KEY": "tu_token_secreto"
+        "SCRAPIO_API_KEY": "${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}"
       }
     }
   }
@@ -1742,7 +1787,7 @@ export default function Home() {
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-base text-slate-800 overflow-x-auto">
                     <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer TU_SCRAPIO_API_KEY" \\
+  -H "Authorization: Bearer ${scrapioApiKey || "sk_scrapio_default_secret_key_2026"}" \\
   -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${namespace}"}'`}</pre>
                   </div>
                 </div>
@@ -1754,7 +1799,7 @@ export default function Home() {
                   <ul className="list-disc list-inside space-y-2 text-base text-slate-700">
                     <li><strong>Método:</strong> POST</li>
                     <li><strong>URL:</strong> <code>https://scrapio-one.vercel.app/api/v1/query</code></li>
-                    <li><strong>Headers:</strong> <code>Authorization: Bearer TU_SCRAPIO_API_KEY</code></li>
+                    <li><strong>Headers:</strong> <code>Authorization: Bearer {scrapioApiKey || "sk_scrapio_default_secret_key_2026"}</code></li>
                     <li><strong>Body:</strong> <code>{`{ "query": "{{ $json.prompt }}", "namespace": "${namespace}" }`}</code></li>
                   </ul>
                 </div>
