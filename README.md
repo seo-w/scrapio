@@ -47,9 +47,10 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
   * Interfaz web con barra de progreso que consulta en tiempo real el porcentaje y estado del workflow en GitHub Actions (`/api/ingest/status`).
 * **Extracción de Entidades SEO**:
   * Endpoint `/api/entities` para analizar y extraer entidades semánticas clave de los sitios indexados.
-* **Integración MCP & OpenAPI**:
+* **Integración MCP & OpenAPI con Auto-Inyección de API Key**:
   * Servidor MCP nativo (`npm run mcp`) para consultar Scrapio desde **Claude Desktop**, **Cursor** o agentes IA.
-  * Especificación `/api/openapi.json` lista para conectar con GPTs personalizados de OpenAI o herramientas externas.
+  * Modal interactivo **"Conecta Scrapio con tu LLM Preferido"**: visualización segura de la clave del usuario con botón de visibilidad y prompts 100% listos para copiar con la API Key ya pre-insertada.
+  * Especificación `/api/openapi.json` abierta para conectar con GPTs personalizados de OpenAI o herramientas externas sin bloqueos de sesión.
 
 ---
 
@@ -205,6 +206,9 @@ npm run mcp
 * **Autenticación:**
   * Cabecera HTTP: `Authorization: Bearer <SCRAPIO_API_KEY>`
   * O parámetro URL (GET): `?key=<SCRAPIO_API_KEY>` (o `?apiKey=...`)
+* **Auto-Inyección en UI:**
+  * El endpoint `/api/me` entrega la clave de API activa de forma segura a usuarios autenticados.
+  * La interfaz web inyecta automáticamente la clave real en los botones de copiado de prompts y ejemplos de cURL/n8n.
 * **Endpoints:**
   * **`GET /api/v1/namespaces`**: Devuelve el listado de sitios/clientes indexados y su cantidad de vectores en Pinecone. Ideal para que Claude u otros LLMs consulten los proyectos sin requerir cookies ni sesión de Clerk:
     ```
