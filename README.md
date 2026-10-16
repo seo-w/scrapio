@@ -14,6 +14,28 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 - [🤖 Ingesta Automatizada en GitHub Actions](#-ingesta-automatizada-en-github-actions)
 - [🌐 Despliegue en Vercel](#-despliegue-en-vercel)
 - [🏗️ Estructura del Proyecto](#️-estructura-del-proyecto)
+- [📝 Historial de Cambios](#-historial-de-cambios)
+
+---
+
+## 📝 Historial de Cambios
+
+### 2026-10-15 — Fix: Anti-caché en Edge CDN de Vercel para `/api/v1/*`
+
+**Problema detectado:** El Edge CDN de Vercel podía devolver respuestas cacheadas del endpoint `GET /api/v1/namespaces` (y otras rutas `/api/v1/*`), haciendo que clientes externos (LLMs, agentes, cURL) recibieran datos desactualizados de Pinecone en lugar de los valores reales en tiempo real. Esto causaba, por ejemplo, que herramientas de IA mostraran un total incorrecto de vectores o una lista incompleta de namespaces.
+
+**Causa raíz:** Vercel Edge Cache **no respeta** el header estándar `Cache-Control: no-store` de manera confiable en sus nodos CDN. Para desactivar el caché a nivel de CDN se requieren headers específicos de Vercel: `Surrogate-Control`, `CDN-Cache-Control` y `Vercel-CDN-Cache-Control`.
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---|---|
+| `app/api/v1/namespaces/route.ts` | Agregados headers `Surrogate-Control: no-store`, `CDN-Cache-Control: no-store` y `Vercel-CDN-Cache-Control: no-store` en la respuesta `NextResponse` |
+| `next.config.ts` | Sección `headers()` global que fuerza `no-store` en **todas** las rutas `/api/v1/:path*` a nivel de configuración de red — capa de defensa adicional independiente del código del route handler |
+
+**Resultado:** El endpoint siempre consulta Pinecone en tiempo real y devuelve el JSON fresco en cada petición, sin importar el proveedor, región de Vercel o cliente que realice la solicitud.
+
+
 
 ---
 
