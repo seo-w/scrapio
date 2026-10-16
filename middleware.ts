@@ -27,9 +27,10 @@ export default function middleware(request: any, event: any) {
 
 export const config = {
   matcher: [
-    // Omitir estáticos y archivos internos de Next.js
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    // Siempre evaluar para rutas de API
-    "/(api|trpc)(.*)",
+    // Omitir estáticos, archivos internos y APIs públicas/headless (v1, mcp, openapi)
+    "/((?!_next|api/v1|api/mcp|api/openapi.json|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Evaluar solo APIs protegidas que requieren autenticación de Clerk (no v1 ni mcp ni openapi)
+    "/api/((?!v1|mcp|openapi.json).*)",
+    "/trpc(.*)",
   ],
 };
