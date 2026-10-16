@@ -12,18 +12,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/entities(.*)", // Permite acceso con sesión Clerk o con SCRAPIO_API_KEY
 ]);
 
-const clerkHandler = clerkMiddleware(async (auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
 });
-
-export default function middleware(request: any, event: any) {
-  if (isPublicRoute(request)) {
-    return;
-  }
-  return clerkHandler(request, event);
-}
 
 export const config = {
   matcher: [

@@ -20,9 +20,23 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-15 — Fix: Endpoint público `/api/v1/namespaces` para ChatGPT y Claude Web Chat
+
+**Problema detectado:** Al consultar desde las interfaces web de chat de **ChatGPT** (`chatgpt.com`) y **Claude** (`claude.ai`), los asistentes no podían leer los namespaces o devolvían datos viejos/cacheados:
+1. **ChatGPT Web Chat:** Detectaba el parámetro `?key=sk_...` en la URL del prompt. Por políticas de seguridad, ChatGPT bloquea o elimina parámetros que parezcan claves secretas (`sk_`), haciendo la petición a `/api/v1/namespaces` sin token. Como el endpoint exigía autenticación obligatoria, devolvía `401 Unauthorized` y ChatGPT reportaba: *"acceso bloqueado por autenticación... redirigida a Clerk"*.
+2. **Claude Web Chat:** Tenía en su caché interno o memoria de conversación la consulta anterior de semanas pasadas con números viejos (19,747 vectores vs 52,152 reales) debido a que la URL con clave era idéntica.
+3. **Clerk Middleware:** En `/api/namespaces`, una función envoltorio personalizada en `middleware.ts` retornaba antes de inicializar el contexto de Clerk, provocando un error 500 no controlado (`Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()`).
+
+**Solución aplicada (Filosofía Ponytail):**
+1. **Ruta pública sin fricción:** Se eliminó la obligatoriedad del token en `GET /api/v1/namespaces`. Al ser metadatos públicos (nombres de proyectos y cantidad de vectores sin contenido de documentos), no requiere candado `sk_`. Ahora cualquier bot o chat web puede acceder directamente a `https://scrapio-one.vercel.app/api/v1/namespaces` sin disparar filtros de seguridad.
+2. **Prompt limpio en la UI:** En el modal de integraciones de Scrapio, el prompt generado ahora usa la URL limpia `https://scrapio-one.vercel.app/api/v1/namespaces` (sin `?key=...`), garantizando que ChatGPT y Claude la consulten en tiempo real sin alertas de seguridad ni caché obsoleto.
+3. **Corrección de Middleware Clerk:** Se simplificó `middleware.ts` utilizando la exportación canónica de `clerkMiddleware()` recomendada por Clerk, y se envolvió `getScrapioUser()` en un bloque `try/catch` defensivo para prevenir caídas 500.
+
+---
+
 ### 2026-10-15 — Fix: Anti-caché en Edge CDN de Vercel para `/api/v1/*`
 
-**Problema detectado:** El Edge CDN de Vercel podía devolver respuestas cacheadas del endpoint `GET /api/v1/namespaces` (y otras rutas `/api/v1/*`), haciendo que clientes externos (LLMs, agentes, cURL) recibieran datos desactualizados de Pinecone en lugar de los valores reales en tiempo real. Esto causaba, por ejemplo, que herramientas de IA mostraran un total incorrecto de vectores o una lista incompleta de namespaces.
+**Problema detectado:** El Edge CDN de Vercel podía devolver respuestas cacheadas del endpoint `GET /api/v1/namespaces` (y otras rutas `/api/v1/*`), haciendo que clientes externos (LLMs, agentes, cURL) recibieran datos desactualizados de Pinecone en lugar de los valores reales en tiempo real.
 
 **Causa raíz:** Vercel Edge Cache **no respeta** el header estándar `Cache-Control: no-store` de manera confiable en sus nodos CDN. Para desactivar el caché a nivel de CDN se requieren headers específicos de Vercel: `Surrogate-Control`, `CDN-Cache-Control` y `Vercel-CDN-Cache-Control`.
 
@@ -30,10 +44,13 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 | Archivo | Cambio |
 |---|---|
-| `app/api/v1/namespaces/route.ts` | Agregados headers `Surrogate-Control: no-store`, `CDN-Cache-Control: no-store` y `Vercel-CDN-Cache-Control: no-store` en la respuesta `NextResponse` |
-| `next.config.ts` | Sección `headers()` global que fuerza `no-store` en **todas** las rutas `/api/v1/:path*` a nivel de configuración de red — capa de defensa adicional independiente del código del route handler |
+| `app/api/v1/namespaces/route.ts` | Endpoint público sin token obligatorio + headers `Surrogate-Control`, `CDN-Cache-Control` y `Vercel-CDN-Cache-Control: no-store` |
+| `middleware.ts` | Exportación estándar de `clerkMiddleware` evitando bypass que corrompía el contexto de autenticación |
+| `lib/auth.ts` | Manejo seguro `try/catch` en `getScrapioUser()` |
+| `app/page.tsx` | Actualización de templates de prompts a la URL limpia pública |
+| `next.config.ts` | Sección `headers()` global que fuerza `no-store` en **todas** las rutas `/api/v1/:path*` |
 
-**Resultado:** El endpoint siempre consulta Pinecone en tiempo real y devuelve el JSON fresco en cada petición, sin importar el proveedor, región de Vercel o cliente que realice la solicitud.
+**Resultado:** El endpoint responde con código HTTP 200 en tiempo real tanto para cURL como para los navegadores y crawlers de ChatGPT y Claude Web Chat.
 
 
 

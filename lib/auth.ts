@@ -13,16 +13,17 @@ export interface ScrapioAuthUser {
  * Obtiene el usuario autenticado con sus roles y permisos
  */
 export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
-  const { userId } = await auth();
-  if (!userId) return null;
+  try {
+    const { userId } = await auth();
+    if (!userId) return null;
 
-  const user = await currentUser();
-  if (!user) return null;
+    const user = await currentUser();
+    if (!user) return null;
 
-  const primaryEmail =
-    user.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ||
-    user.emailAddresses?.[0]?.emailAddress ||
-    "";
+    const primaryEmail =
+      user.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ||
+      user.emailAddresses?.[0]?.emailAddress ||
+      "";
 
   const adminEmail = (process.env.ADMIN_EMAIL || "avraxas@gmail.com").toLowerCase();
   const isDefaultAdminEmail = primaryEmail.toLowerCase() === adminEmail;
@@ -59,4 +60,8 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
     allowedNamespaces,
     canUseOpenAI,
   };
+  } catch (err) {
+    console.warn("Error resolviendo usuario de Clerk en getScrapioUser:", err);
+    return null;
+  }
 }
