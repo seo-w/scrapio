@@ -380,6 +380,7 @@ export default function Home() {
   const [scanUrl, setScanUrl] = useState("");
   const [scanNamespace, setScanNamespace] = useState("");
   const [scanMaxPages, setScanMaxPages] = useState("100");
+  const [scanAiProvider, setScanAiProvider] = useState<string>("gemini");
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
@@ -665,6 +666,7 @@ export default function Home() {
     setScanStatus(null);
 
     try {
+      const selectedEngine = scanAiProvider || aiProvider;
       const res = await fetch("/api/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -672,7 +674,7 @@ export default function Home() {
           targetUrl: scanUrl.trim(),
           clientNamespace: scanNamespace.trim(),
           maxPages: parseInt(scanMaxPages, 10) || 100,
-          aiProvider,
+          aiProvider: selectedEngine,
         }),
       });
 
@@ -683,6 +685,7 @@ export default function Home() {
       setIsPollingStatus(true);
       setTimeout(checkIngestStatus, 2500);
       setNamespace(scanNamespace.trim());
+      setAiProvider(selectedEngine);
       setTimeout(() => fetchNamespaces(), 5000);
     } catch (err: any) {
       setScanStatus({ type: "error", message: err.message });
@@ -696,6 +699,7 @@ export default function Home() {
     setScanNamespace(targetNs);
     setScanUrl(inferUrlFromNamespace(targetNs));
     setScanStatus(null);
+    setScanAiProvider(aiProvider);
     setIsModalOpen(true);
   };
 
@@ -703,6 +707,7 @@ export default function Home() {
     setScanNamespace("");
     setScanUrl("");
     setScanStatus(null);
+    setScanAiProvider(aiProvider);
     setIsModalOpen(true);
   };
 
@@ -1599,11 +1604,97 @@ export default function Home() {
               </div>
               <div>
                 <h3 className="text-lg sm:text-xl font-bold text-slate-900">Rastrear o Crear Espacio de Cliente</h3>
-                <p className="text-xs sm:text-base text-slate-500">Envía la orden a GitHub Actions usando {aiProvider === "gemini" ? "Google Gemini" : "OpenAI"}.</p>
+                <p className="text-xs sm:text-base text-slate-500">Envía la orden a GitHub Actions usando {scanAiProvider === "gemini" ? "Google Gemini" : "OpenAI"}.</p>
               </div>
             </div>
 
             <form onSubmit={handleStartScan} className="space-y-3.5 sm:space-y-4">
+              {/* Selector de Motor de IA */}
+              <div>
+                <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-1.5">
+                  Motor de IA para Vectorización y RAG
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Opción Gemini */}
+                  <button
+                    type="button"
+                    disabled={scanStatus?.type === "success"}
+                    onClick={() => setScanAiProvider("gemini")}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      scanAiProvider === "gemini"
+                        ? "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                        : "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-slate-900">Google Gemini</span>
+                        {customGeminiKey.trim() && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-amber-950 font-bold">
+                            BYOK
+                          </span>
+                        )}
+                      </div>
+                      {scanAiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-blue-600"></span>}
+                    </div>
+                    <span className="text-xs text-slate-500">gemini-embedding-001 (768d) · Gratuito</span>
+                  </button>
+
+                  {/* Opción OpenAI */}
+                  {(() => {
+                    const hasAccess = Boolean(
+                      currentUserInfo?.isAdmin ||
+                      currentUserInfo?.canUseOpenAI ||
+                      customOpenaiKey.trim()
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        disabled={scanStatus?.type === "success"}
+                        onClick={() => {
+                          if (hasAccess) {
+                            setScanAiProvider("openai");
+                          } else {
+                            setIsByokModalOpen(true);
+                          }
+                        }}
+                        title={
+                          hasAccess
+                            ? "Modelo OpenAI disponible para vectorización"
+                            : "Restringido por el administrador. Haz clic para ingresar tu propia clave API (BYOK) y desbloquearlo."
+                        }
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          scanAiProvider === "openai"
+                            ? "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                            : hasAccess
+                            ? "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
+                            : "bg-slate-50/60 border-slate-200 hover:bg-amber-50/50 hover:border-amber-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-sm text-slate-900">OpenAI GPT-4o Mini</span>
+                            {customOpenaiKey.trim() ? (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-amber-950 font-bold">
+                                BYOK
+                              </span>
+                            ) : !hasAccess ? (
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            ) : null}
+                          </div>
+                          {scanAiProvider === "openai" && <span className="w-2 h-2 rounded-full bg-blue-600"></span>}
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {hasAccess
+                            ? "text-embedding-3-small (768d)"
+                            : "Haz clic para ingresar tu API Key y desbloquearlo"}
+                        </span>
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
               <div>
                 <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-1">
                   Namespace / Identificador del Cliente
