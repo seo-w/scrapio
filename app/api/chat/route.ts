@@ -83,9 +83,22 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error en /api/chat:", error);
+    const isQuota =
+      error.status === 429 ||
+      error.message?.includes("429") ||
+      error.message?.includes("RESOURCE_EXHAUSTED") ||
+      error.message?.includes("quota") ||
+      error.message?.includes("Quota") ||
+      error.message?.includes("insufficient_quota");
+
     return NextResponse.json(
-      { error: error.message || "Error interno del servidor." },
-      { status: 500 }
+      {
+        error: isQuota
+          ? `Límite de cuota alcanzado (${error.message?.includes("RESOURCE_EXHAUSTED") ? "Google RESOURCE_EXHAUSTED" : "HTTP 429"}). Si utilizas tu propia API Key, ten en cuenta que el consumo externo también descuenta de tu cuota global.`
+          : (error.message || "Error interno del servidor."),
+        quotaExhausted: isQuota,
+      },
+      { status: isQuota ? 429 : 500 }
     );
   }
 }

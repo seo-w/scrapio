@@ -389,9 +389,10 @@ export default function Home() {
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Consultas del día diferenciadas por proveedor de IA (persistidas en localStorage)
+  // Consultas del día diferenciadas por proveedor de IA (persistidas en localStorage con reset diario)
   const [geminiQueries, setGeminiQueries] = useState(0);
   const [openaiQueries, setOpenaiQueries] = useState(0);
+  const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -558,10 +559,22 @@ export default function Home() {
     if (typeof window !== "undefined") {
       setCustomGeminiKey(localStorage.getItem("scrapio_byok_gemini") || "");
       setCustomOpenaiKey(localStorage.getItem("scrapio_byok_openai") || "");
-      const storedGemini = localStorage.getItem("scrapio_queries_gemini");
-      const storedOpenai = localStorage.getItem("scrapio_queries_openai");
-      if (storedGemini !== null) setGeminiQueries(parseInt(storedGemini, 10) || 0);
-      if (storedOpenai !== null) setOpenaiQueries(parseInt(storedOpenai, 10) || 0);
+
+      // Control de fecha para reinicio automático diario (medianoche)
+      const today = new Date().toISOString().slice(0, 10);
+      const storedDate = localStorage.getItem("scrapio_queries_date");
+      if (storedDate !== today) {
+        localStorage.setItem("scrapio_queries_date", today);
+        localStorage.setItem("scrapio_queries_gemini", "0");
+        localStorage.setItem("scrapio_queries_openai", "0");
+        setGeminiQueries(0);
+        setOpenaiQueries(0);
+      } else {
+        const storedGemini = localStorage.getItem("scrapio_queries_gemini");
+        const storedOpenai = localStorage.getItem("scrapio_queries_openai");
+        if (storedGemini !== null) setGeminiQueries(parseInt(storedGemini, 10) || 0);
+        if (storedOpenai !== null) setOpenaiQueries(parseInt(storedOpenai, 10) || 0);
+      }
     }
   }, []);
 
@@ -621,7 +634,14 @@ export default function Home() {
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(1).replace(".", ",") + " s";
       const tokensEstimated = Math.round(data.answer ? data.answer.length * 0.35 + 850 : 1100);
 
-      if (!res.ok) throw new Error(data.error || "Error al procesar consulta.");
+      if (!res.ok) {
+        if (res.status === 429 || data.quotaExhausted) {
+          setIsQuotaExhausted(true);
+        }
+        throw new Error(data.error || "Error al procesar consulta.");
+      }
+
+      setIsQuotaExhausted(false);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -633,6 +653,10 @@ export default function Home() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      const today = new Date().toISOString().slice(0, 10);
+      if (typeof window !== "undefined") localStorage.setItem("scrapio_queries_date", today);
+
       if (aiProvider === "gemini") {
         setGeminiQueries((prev) => {
           const next = prev + 1;
@@ -647,12 +671,16 @@ export default function Home() {
         });
       }
     } catch (err: any) {
+      const is429 = err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED") || err.message?.includes("cuota");
+      if (is429) setIsQuotaExhausted(true);
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: `❌ Ocurrió un error: ${err.message}`,
+          content: is429
+            ? `⚠️ Límite de cuota alcanzado (${aiProvider === "gemini" ? "Google Gemini" : "OpenAI"} HTTP 429). Si usas tu propia API Key, ten en cuenta que las consultas realizadas en otras aplicaciones externas también descuentan de tu cuota. Puedes ingresar otra clave en Ajustes de API.`
+            : `❌ Ocurrió un error: ${err.message}`,
         },
       ]);
     } finally {
@@ -1004,77 +1032,65 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Bottom System Status Card */}
-        <div
-          className="bg-white border border-[#DCE4ED] rounded-xl p-4 shadow-2xs space-y-3"
-          style={{ backgroundColor: "rgb(255, 255, 255)", border: "1px solid rgb(226, 232, 240)" }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-base font-semibold text-slate-500 uppercase tracking-wider">Motor Activo</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-base font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span> OK
-            </span>
-          </div>
+        {/* Bottom System Status Card - Versión Compacta y Minimalista */}
+        {(() => {
+          const isUsingBYOK = Boolean((aiProvider === "openai" ? customOpenaiKey : customGeminiKey).trim());
+          const currentQueries = aiProvider === "gemini" ? geminiQueries : openaiQueries;
 
-          <div>
-            <div className="text-base font-bold text-slate-900">
-              {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "OpenAI GPT-4o Mini"}
-            </div>
-            <div className="text-base text-slate-500 mt-0.5">
-              {aiProvider === "gemini" ? "gemini-embedding-001" : "text-embedding-3-small"} · Pinecone
-            </div>
-          </div>
+          return (
+            <div
+              className={`rounded-xl p-3 shadow-2xs space-y-2 border transition-all duration-200 ${
+                isQuotaExhausted
+                  ? "bg-amber-50/70 border-amber-300"
+                  : "bg-white border-slate-200/90"
+              }`}
+            >
+              {/* Fila 1: Modelo y Tag de Clave */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${aiProvider === "gemini" ? "bg-blue-600" : "bg-emerald-600"}`}></span>
+                  <span className="text-xs font-bold text-slate-900">
+                    {aiProvider === "gemini" ? "Gemini 3.8 Flash" : "GPT-4o Mini"}
+                  </span>
+                </div>
+                <span
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                    isUsingBYOK
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
+                  }`}
+                >
+                  {isUsingBYOK ? "BYOK" : "Sistema"}
+                </span>
+              </div>
 
-          {aiProvider === "gemini" ? (
-            <div className="pt-2 border-t border-slate-100 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-base font-semibold text-slate-500 uppercase tracking-wider">
-                  Cuota diaria (Google)
+              {/* Fila 2: Contador y Estado */}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                <span className="text-slate-500 text-[11px]">
+                  Consultas hoy: <strong className="text-slate-800 font-bold">{currentQueries}</strong>
                 </span>
-                <span className="text-base font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
-                  Nivel Gratis
-                </span>
+                {isQuotaExhausted ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                    Cuota 429
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Activo
+                  </span>
+                )}
               </div>
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (geminiQueries / 750) * 100)}%` }}
-                ></div>
-              </div>
-              <div className="flex items-center justify-between mt-1 text-base text-slate-600 font-medium">
-                <span>
-                  <strong className="text-slate-900 font-bold">{geminiQueries}</strong> / 750 hoy
-                </span>
-                <span className="text-slate-500 text-base">{750 - geminiQueries} restantes</span>
-              </div>
+
+              {/* Fila 3: Aviso discreto solo si la cuota está agotada */}
+              {isQuotaExhausted && (
+                <div className="pt-1.5 border-t border-amber-200/70 text-[11px] text-amber-800 leading-tight">
+                  Límite de cuota alcanzado (por uso en Scrapio o consumo externo).
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="pt-2 border-t border-slate-100 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-base font-semibold text-slate-500 uppercase tracking-wider">
-                  Consumo API (OpenAI)
-                </span>
-                <span className="text-base font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
-                  Pay-as-you-go
-                </span>
-              </div>
-              {/* Progress Bar */}
-              <div className="w-full bg-emerald-100 h-2 rounded-full overflow-hidden">
-                <div className="bg-emerald-600 h-full rounded-full" style={{ width: "100%" }}></div>
-              </div>
-              <div className="flex items-center justify-between mt-1 text-base text-slate-600 font-medium">
-                <span>
-                  <strong className="text-slate-900 font-bold">{openaiQueries}</strong> consultas hoy
-                </span>
-                <span className="text-emerald-800 font-bold text-base">Sin tope diario</span>
-              </div>
-              <div className="text-base text-slate-500 mt-1">
-                Tarifa: ~$0.15 USD / 1M tokens
-              </div>
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </aside>
       {/* END: Sidebar */}
 
@@ -2698,8 +2714,11 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleSaveByok} className="space-y-4">
-              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-base text-amber-900 leading-relaxed">
-                Tus claves se guardan localmente en tu navegador. Al ingresar tu propia API Key de OpenAI, podrás usar el modelo <strong>GPT-4o Mini</strong> de forma directa e independiente.
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 text-xs sm:text-sm text-amber-900 leading-relaxed">
+                Tus claves se guardan localmente en tu navegador. Al ingresar tu propia API Key de OpenAI, podrás usar <strong>GPT-4o Mini</strong> de forma directa.
+                <span className="block mt-1 text-amber-800/90 text-[11px] sm:text-xs">
+                  * Nota: Tu API Key comparte cuota con cualquier otra aplicación o script externo donde la utilices.
+                </span>
               </div>
 
               <div>
