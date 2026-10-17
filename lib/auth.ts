@@ -7,6 +7,7 @@ export interface ScrapioAuthUser {
   isAdmin: boolean;
   allowedNamespaces: string[];
   canUseOpenAI: boolean;
+  canUseGemini: boolean;
 }
 
 /**
@@ -51,6 +52,7 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
     : [];
 
   const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
+  const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
 
   return {
     userId,
@@ -59,6 +61,7 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
     isAdmin,
     allowedNamespaces,
     canUseOpenAI,
+    canUseGemini,
   };
   } catch (err) {
     console.warn("Error resolviendo usuario de Clerk en getScrapioUser:", err);

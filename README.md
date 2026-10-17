@@ -20,6 +20,16 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-17 — Feat: Control granular independiente de Gemini y OpenAI por usuario + Tolerancia de namespaces
+
+**Mejoras implementadas:**
+1. **Control individual de Gemini 3.8 Flash:** El administrador ahora puede activar o desactivar **tanto Google Gemini como OpenAI GPT-4o Mini** de forma 100% independiente para cada usuario desde el panel de *"Gestión Usuarios"*.
+2. **Desbloqueo automático con clave propia (BYOK):** Si un usuario tiene restringido algún modelo por el administrador, puede hacer clic en él e ingresar su propia API Key personal para desbloquearlo de inmediato sin consumir cuotas del sistema.
+3. **Selector de modelos en el modal de nuevo espacio:** Se agregó un selector interactivo en el popup de *"Rastrear o Crear Espacio de Cliente"* para elegir el motor de vectorización (Gemini vs OpenAI) en el mismo instante de enviar la orden a GitHub Actions.
+4. **Tolerancia en autorización de namespaces:** En `POST /api/chat`, la validación de pertenencia de proyectos ahora normaliza mayúsculas, minúsculas y prefijos (`cliente-`), eliminando falsos rechazos 403.
+
+---
+
 ### 2026-10-15 — Fix: Endpoint público `/api/v1/namespaces` para ChatGPT y Claude Web Chat
 
 **Problema detectado:** Al consultar desde las interfaces web de chat de **ChatGPT** (`chatgpt.com`) y **Claude** (`claude.ai`), los asistentes no podían leer los namespaces o devolvían datos viejos/cacheados:

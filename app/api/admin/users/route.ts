@@ -30,6 +30,7 @@ export async function GET() {
         role: isAdmin ? "admin" : (meta.role || "user"),
         allowedNamespaces: Array.isArray(meta.allowed_namespaces) ? meta.allowed_namespaces : [],
         canUseOpenAI: isAdmin ? true : !!meta.can_use_openai,
+        canUseGemini: isAdmin ? true : meta.can_use_gemini !== false,
         createdAt: u.createdAt,
         lastSignInAt: u.lastSignInAt,
       };
@@ -53,7 +54,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { userId, role, allowedNamespaces, canUseOpenAI } = body;
+    const { userId, role, allowedNamespaces, canUseOpenAI, canUseGemini } = body;
 
     if (!userId) {
       return NextResponse.json({ error: "userId es obligatorio." }, { status: 400 });
@@ -71,6 +72,7 @@ export async function PATCH(req: NextRequest) {
       ...(role !== undefined ? { role } : {}),
       ...(allowedNamespaces !== undefined ? { allowed_namespaces: allowedNamespaces } : {}),
       ...(canUseOpenAI !== undefined ? { can_use_openai: canUseOpenAI } : {}),
+      ...(canUseGemini !== undefined ? { can_use_gemini: canUseGemini } : {}),
     };
 
     await client.users.updateUserMetadata(userId, {

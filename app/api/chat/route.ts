@@ -28,19 +28,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Validar acceso al namespace (multi-tenant isolation)
-    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+    // 1. Validar acceso al namespace (multi-tenant isolation con coincidencia tolerante)
+    const clean = (s: string) => s.toLowerCase().replace(/^cliente[-_]/, "").replace(/[-_]/g, " ").trim();
+    const allowedClean = (user.allowedNamespaces || []).map(clean);
+
+    if (!user.isAdmin && !allowedClean.includes(clean(namespace))) {
       return NextResponse.json(
         { error: `No tienes permisos para consultar el proyecto/namespace '${namespace}'.` },
         { status: 403 }
       );
     }
 
-    // 2. Validar permiso de modelo (Gemini por defecto para todos, OpenAI solo con permiso o BYOK)
+    // 2. Validar permiso de modelo (Gemini y OpenAI requieren autorización o clave propia BYOK)
     const provider = (aiProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
+
     if (provider === "openai" && !user.canUseOpenAI && !customApiKey) {
       return NextResponse.json(
-        { error: "El modelo OpenAI está restringido por el administrador. Ingresa tu propia API Key o utiliza Gemini." },
+        { error: "El modelo OpenAI está restringido por el administrador. Ingresa tu propia API Key (BYOK) para desbloquearlo." },
+        { status: 403 }
+      );
+    }
+
+    if (provider === "gemini" && !user.canUseGemini && !customApiKey) {
+      return NextResponse.json(
+        { error: "El modelo Google Gemini está restringido por el administrador. Ingresa tu propia API Key (BYOK) para desbloquearlo." },
         { status: 403 }
       );
     }

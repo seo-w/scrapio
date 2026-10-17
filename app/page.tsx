@@ -354,6 +354,7 @@ export default function Home() {
     isAdmin: boolean;
     allowedNamespaces: string[];
     canUseOpenAI: boolean;
+    canUseGemini: boolean;
   } | null>(null);
 
   // Estado BYOK (Bring Your Own Key)
@@ -473,13 +474,14 @@ export default function Home() {
   const handleUpdateUserPermissions = async (
     userId: string,
     allowedNamespaces: string[],
-    canUseOpenAI: boolean
+    canUseOpenAI: boolean,
+    canUseGemini: boolean = true
   ) => {
     try {
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, allowedNamespaces, canUseOpenAI }),
+        body: JSON.stringify({ userId, allowedNamespaces, canUseOpenAI, canUseGemini }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -1386,23 +1388,47 @@ export default function Home() {
                 {/* Filter parameter pills: Both models visible and clickable */}
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                   <span className="text-xs sm:text-base font-semibold text-slate-500 mr-1 hidden sm:inline">Modelo:</span>
-                  <button
-                    type="button"
-                    onClick={() => setAiProvider("gemini")}
-                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border text-xs sm:text-base font-semibold transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 ${
-                      aiProvider === "gemini"
-                        ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
-                        : "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
-                    }`}
-                  >
-                    <span>Gemini 3.8 Flash</span>
-                    {customGeminiKey.trim() && (
-                      <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
-                        BYOK
-                      </span>
-                    )}
-                    {aiProvider === "gemini" && <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></span>}
-                  </button>
+                  {(() => {
+                    const hasGeminiAccess = Boolean(
+                      currentUserInfo?.isAdmin ||
+                      currentUserInfo?.canUseGemini !== false ||
+                      customGeminiKey.trim()
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (hasGeminiAccess) {
+                            setAiProvider("gemini");
+                          } else {
+                            setIsByokModalOpen(true);
+                          }
+                        }}
+                        title={
+                          hasGeminiAccess
+                            ? "Modelo Google Gemini 3.8 Flash disponible"
+                            : "Restringido por el administrador. Haz clic para ingresar tu propia API Key (BYOK) y desbloquearlo."
+                        }
+                        className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border text-xs sm:text-base font-semibold transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 ${
+                          aiProvider === "gemini"
+                            ? "bg-[#2563EB] text-white border-[#2563EB] shadow-xs"
+                            : hasGeminiAccess
+                            ? "bg-slate-50 text-slate-700 border-[#DCE4ED] hover:bg-white"
+                            : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200/60"
+                        }`}
+                      >
+                        {!hasGeminiAccess && <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />}
+                        <span>Gemini 3.8 Flash</span>
+                        {customGeminiKey.trim() && (
+                          <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
+                            BYOK
+                          </span>
+                        )}
+                        {aiProvider === "gemini" && <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white"></span>}
+                      </button>
+                    );
+                  })()}
 
                   {(() => {
                     const hasAccess = Boolean(
@@ -1616,29 +1642,58 @@ export default function Home() {
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {/* Opción Gemini */}
-                  <button
-                    type="button"
-                    disabled={scanStatus?.type === "success"}
-                    onClick={() => setScanAiProvider("gemini")}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      scanAiProvider === "gemini"
-                        ? "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
-                        : "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-sm text-slate-900">Google Gemini</span>
-                        {customGeminiKey.trim() && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-amber-950 font-bold">
-                            BYOK
-                          </span>
-                        )}
-                      </div>
-                      {scanAiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-blue-600"></span>}
-                    </div>
-                    <span className="text-xs text-slate-500">gemini-embedding-001 (768d) · Gratuito</span>
-                  </button>
+                  {(() => {
+                    const hasGeminiAccess = Boolean(
+                      currentUserInfo?.isAdmin ||
+                      currentUserInfo?.canUseGemini !== false ||
+                      customGeminiKey.trim()
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        disabled={scanStatus?.type === "success"}
+                        onClick={() => {
+                          if (hasGeminiAccess) {
+                            setScanAiProvider("gemini");
+                          } else {
+                            setIsByokModalOpen(true);
+                          }
+                        }}
+                        title={
+                          hasGeminiAccess
+                            ? "Modelo Google Gemini disponible"
+                            : "Restringido por el administrador. Haz clic para ingresar tu propia clave API (BYOK) y desbloquearlo."
+                        }
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          scanAiProvider === "gemini"
+                            ? "bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs"
+                            : hasGeminiAccess
+                            ? "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
+                            : "bg-slate-50/60 border-slate-200 hover:bg-amber-50/50 hover:border-amber-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-sm text-slate-900">Google Gemini</span>
+                            {customGeminiKey.trim() ? (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-400 text-amber-950 font-bold">
+                                BYOK
+                              </span>
+                            ) : !hasGeminiAccess ? (
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            ) : null}
+                          </div>
+                          {scanAiProvider === "gemini" && <span className="w-2 h-2 rounded-full bg-blue-600"></span>}
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {hasGeminiAccess
+                            ? "gemini-embedding-001 (768d) · Gratuito"
+                            : "Haz clic para ingresar tu API Key y desbloquearlo"}
+                        </span>
+                      </button>
+                    );
+                  })()}
 
                   {/* Opción OpenAI */}
                   {(() => {
@@ -2874,16 +2929,39 @@ export default function Home() {
                               Permisos de Modelos de IA:
                             </span>
                             <div className="space-y-2">
-                              <div className="flex items-center justify-between p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-lg">
+                              {/* Gemini Toggle */}
+                              <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg">
                                 <div>
-                                  <div className="text-sm font-bold text-emerald-950">Gemini 3.8 Flash</div>
-                                  <div className="text-xs text-emerald-700">Por defecto para todos</div>
+                                  <div className="text-sm font-bold text-slate-900">Google Gemini 3.8 Flash</div>
+                                  <div className="text-xs text-slate-500">Motor por defecto (768d)</div>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                                  Habilitado
-                                </span>
+                                {u.role === "admin" ? (
+                                  <span className="text-xs font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
+                                    Ilimitado (Admin)
+                                  </span>
+                                ) : (
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={u.canUseGemini !== false}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setAdminUsers((prev) =>
+                                          prev.map((item) =>
+                                            item.id === u.id
+                                              ? { ...item, canUseGemini: checked }
+                                              : item
+                                          )
+                                        );
+                                      }}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                  </label>
+                                )}
                               </div>
 
+                              {/* OpenAI Toggle */}
                               <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg">
                                 <div>
                                   <div className="text-sm font-bold text-slate-900">OpenAI GPT-4o Mini</div>
@@ -2922,7 +3000,8 @@ export default function Home() {
                                   handleUpdateUserPermissions(
                                     u.id,
                                     u.allowedNamespaces || [],
-                                    Boolean(u.canUseOpenAI)
+                                    Boolean(u.canUseOpenAI),
+                                    u.canUseGemini !== false
                                   )
                                 }
                                 className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm py-2 px-3 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
