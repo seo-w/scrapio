@@ -68,6 +68,7 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
 
     const rawNamespace = (body.namespace || searchParams.get("namespace") || "").trim();
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
+    const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
 
     if (!rawNamespace) {
       return NextResponse.json(
@@ -81,7 +82,9 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
     // 1. Vectorizamos una consulta clave enfocada en la esencia de la empresa y su oferta
     const queryVector = await generateEmbedding(
       "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto",
-      aiProvider
+      aiProvider,
+      3,
+      customApiKey
     );
 
     // 2. Recuperamos los top 12 chunks
@@ -118,7 +121,7 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
 
 Presenta la información de forma ejecutiva, limpia y precisa.`;
 
-    const { text, sources } = await generateRAGResponse(prompt, contextChunks, undefined, aiProvider);
+    const { text, sources } = await generateRAGResponse(prompt, contextChunks, aiProvider, customApiKey);
 
     return NextResponse.json(
       {

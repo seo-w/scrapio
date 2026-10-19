@@ -74,6 +74,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     const topKRaw = body.topK || searchParams.get("topK");
     const topK = Math.min(20, Math.max(1, parseInt(String(topKRaw || "6"), 10) || 6));
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
+    const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
 
     if (!query) {
       return NextResponse.json(
@@ -98,7 +99,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     const resolvedNs = await resolvePineconeNamespace(namespace);
 
     // 2. Vectorizar la consulta
-    const queryVector = await generateEmbedding(query, aiProvider);
+    const queryVector = await generateEmbedding(query, aiProvider, 3, customApiKey);
 
     // 3. Query Pinecone
     const matches = await queryPinecone(resolvedNs, queryVector, topK);
@@ -128,7 +129,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     }));
 
     // 4. Generar RAG sintetizado con IA
-    const { text, sources } = await generateRAGResponse(query, contextChunks, undefined, aiProvider);
+    const { text, sources } = await generateRAGResponse(query, contextChunks, aiProvider, customApiKey);
 
     return NextResponse.json(
       {

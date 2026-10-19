@@ -1423,7 +1423,7 @@ export default function Home() {
                         }}
                         title={
                           hasGeminiAccess
-                            ? "Modelo Google Gemini 3.8 Flash disponible"
+                            ? "Modelo Google Gemini Flash disponible"
                             : "Restringido por el administrador. Haz clic para ingresar tu propia API Key (BYOK) y desbloquearlo."
                         }
                         className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl border text-xs sm:text-base font-semibold transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 ${
@@ -1435,7 +1435,7 @@ export default function Home() {
                         }`}
                       >
                         {!hasGeminiAccess && <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />}
-                        <span>Gemini 3.8 Flash</span>
+                        <span>Gemini Flash</span>
                         {customGeminiKey.trim() && (
                           <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-amber-400 text-amber-950 font-bold">
                             BYOK
@@ -2951,7 +2951,7 @@ export default function Home() {
                               {/* Gemini Toggle */}
                               <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg">
                                 <div>
-                                  <div className="text-sm font-bold text-slate-900">Google Gemini 3.8 Flash</div>
+                                  <div className="text-sm font-bold text-slate-900">Google Gemini Flash</div>
                                   <div className="text-xs text-slate-500">Motor por defecto (768d)</div>
                                 </div>
                                 {u.role === "admin" ? (

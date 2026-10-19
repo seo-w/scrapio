@@ -173,18 +173,45 @@ ${formattedContext}`;
 
   // Proveedor por defecto: Gemini
   const genAI = getGenAIClient(customApiKey);
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-3.8-flash",
-    generationConfig: {
-      temperature: 0.2,
-    }
-  });
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const candidateModels = Array.from(
+    new Set([preferredModel, "gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash-lite"])
+  );
 
+  let lastError: any = null;
   const fullPrompt = `${systemPrompt}\n\nPREGUNTA DEL USUARIO:\n${query}`;
-  const result = await model.generateContent(fullPrompt);
-  
-  return {
-    text: result.response.text(),
-    sources,
-  };
+
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          temperature: 0.2,
+        },
+      });
+
+      const result = await model.generateContent(fullPrompt);
+      return {
+        text: result.response.text(),
+        sources,
+      };
+    } catch (err: any) {
+      lastError = err;
+      const isHighDemandOrUnavailable =
+        err.status === 503 ||
+        err.status === 429 ||
+        err.message?.includes("503") ||
+        err.message?.includes("429") ||
+        err.message?.includes("demand") ||
+        err.message?.includes("RESOURCE_EXHAUSTED");
+
+      if (isHighDemandOrUnavailable && modelName !== candidateModels[candidateModels.length - 1]) {
+        console.warn(`⚠️ Modelo ${modelName} no disponible (${err.status || err.message}). Intentando fallback con siguiente modelo...`);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error("Error al generar respuesta RAG con Gemini.");
 }
