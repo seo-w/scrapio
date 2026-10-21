@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone, resolvePineconeNamespace, getIndexStats } from "@/lib/pinecone";
+import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,25 +19,6 @@ export async function OPTIONS() {
   });
 }
 
-function extractToken(req: NextRequest, body?: any): string {
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7).trim();
-  }
-  const xApiKey = req.headers.get("X-API-Key");
-  if (xApiKey) return xApiKey.trim();
-
-  const { searchParams } = new URL(req.url);
-  const queryKey = searchParams.get("key") || searchParams.get("apiKey") || searchParams.get("token");
-  if (queryKey) return queryKey.trim();
-
-  if (body?.apiKey && typeof body.apiKey === "string") {
-    return body.apiKey.trim();
-  }
-
-  return "";
-}
-
 async function handleQueryRequest(req: NextRequest, isPost: boolean) {
   try {
     let body: any = {};
@@ -48,27 +30,18 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
       }
     }
 
-    const { searchParams } = new URL(req.url);
-    const token = extractToken(req, body);
-    const secretKey = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
-
-    if (!token) {
+    const authUser = await getScrapioUserOrApiKey(req, body);
+    if (!authUser) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Se requiere header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o parámetro '?key=<TOKEN>'.",
+            "No autorizado. Se requiere Scrapio API Key válida vía header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o parámetro '?key=<TOKEN>'.",
         },
         { status: 401, headers: CORS_HEADERS }
       );
     }
 
-    if (token !== secretKey) {
-      return NextResponse.json(
-        { error: "Token de autorización no válido." },
-        { status: 403, headers: CORS_HEADERS }
-      );
-    }
-
+    const { searchParams } = new URL(req.url);
     const query = (body.query || searchParams.get("query") || "").trim();
     const namespace = (body.namespace || searchParams.get("namespace") || "").trim();
     const topKRaw = body.topK || searchParams.get("topK");
@@ -85,13 +58,39 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
 
     if (!namespace) {
       const stats = await getIndexStats();
-      const available = Object.keys(stats.namespaces || {});
+      let available = Object.keys(stats.namespaces || {});
+      if (!authUser.isAdmin) {
+        available = available.filter((ns) => isNamespaceAllowed(authUser, ns));
+      }
       return NextResponse.json(
         {
           error: "El campo 'namespace' es obligatorio.",
           availableNamespaces: available,
         },
         { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    // Validar aislamiento del namespace por usuario
+    if (!isNamespaceAllowed(authUser, namespace)) {
+      return NextResponse.json(
+        { error: `No tienes permisos para consultar el cliente/namespace '${namespace}' con esta API Key.` },
+        { status: 403, headers: CORS_HEADERS }
+      );
+    }
+
+    // Validar permiso de proveedor de IA
+    if (aiProvider === "openai" && !authUser.canUseOpenAI && !customApiKey) {
+      return NextResponse.json(
+        { error: "El modelo OpenAI está restringido para este usuario. Ingresa tu propia API Key en BYOK o usa Gemini." },
+        { status: 403, headers: CORS_HEADERS }
+      );
+    }
+
+    if (aiProvider === "gemini" && !authUser.canUseGemini && !customApiKey) {
+      return NextResponse.json(
+        { error: "El modelo Google Gemini está restringido para este usuario. Ingresa tu propia API Key en BYOK." },
+        { status: 403, headers: CORS_HEADERS }
       );
     }
 

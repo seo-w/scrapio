@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getScrapioUser } from "@/lib/auth";
+import { getScrapioUser, isNamespaceAllowed } from "@/lib/auth";
 import { scrapeSingleUrl } from "@/lib/crawler";
 import { generateEmbeddingsBatch } from "@/lib/ai";
 import { upsertToPinecone, UpsertItem } from "@/lib/pinecone";
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Validar autorización sobre el namespace
-    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+    if (!isNamespaceAllowed(user, namespace)) {
       return NextResponse.json(
         { error: `No tienes permisos para modificar el proyecto '${namespace}'.` },
         { status: 403 }

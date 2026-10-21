@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getIndexStats, queryPinecone, resolvePineconeNamespace } from "@/lib/pinecone";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
+import { queryPinecone, resolvePineconeNamespace, getIndexStats } from "@/lib/pinecone";
+import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,25 +19,7 @@ export async function OPTIONS() {
   });
 }
 
-function extractToken(req: NextRequest, body?: any): string {
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7).trim();
-  }
-  const xApiKey = req.headers.get("X-API-Key");
-  if (xApiKey) return xApiKey.trim();
-
-  const { searchParams } = new URL(req.url);
-  const queryKey = searchParams.get("key") || searchParams.get("apiKey") || searchParams.get("token");
-  if (queryKey) return queryKey.trim();
-
-  if (body?.apiKey && typeof body.apiKey === "string") {
-    return body.apiKey.trim();
-  }
-
-  return "";
-}
-
+// Herramientas MCP expuestas para Claude / Cursor
 const MCP_TOOLS = [
   {
     name: "list_scraped_sites",
@@ -45,12 +28,13 @@ const MCP_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {},
+      required: [],
     },
   },
   {
     name: "query_site",
     description:
-      "Realiza una consulta RAG semántica personalizada sobre el contenido del sitio web scrapeado.",
+      "Realiza una consulta RAG semántica personalizada sobre el contenido del sitio web scrapeado de un cliente.",
     inputSchema: {
       type: "object",
       properties: {
@@ -61,11 +45,11 @@ const MCP_TOOLS = [
         },
         query: {
           type: "string",
-          description: "La pregunta o tema específico a responder con evidencia del sitio",
+          description: "La pregunta o consulta a responder a partir del contenido de su sitio web",
         },
         topK: {
           type: "number",
-          description: "Cantidad de fragmentos semánticos a recuperar (por defecto 6)",
+          description: "Número de fragmentos relevantes a recuperar (por defecto 6, máx 20)",
         },
       },
       required: ["namespace", "query"],
@@ -74,7 +58,7 @@ const MCP_TOOLS = [
   {
     name: "get_site_entities",
     description:
-      "Extrae de forma exhaustiva todas las entidades SEO del sitio web (marcas, productos, servicios, directivos, lugares y Schema.org sugerido).",
+      "Extrae las entidades principales de un sitio web analizado: marcas, organizaciones, productos, personas y Schema.org.",
     inputSchema: {
       type: "object",
       properties: {
@@ -90,7 +74,7 @@ const MCP_TOOLS = [
 
 export async function POST(req: NextRequest) {
   try {
-    let rpc: any = {};
+    let rpc: any;
     try {
       rpc = await req.json();
     } catch {
@@ -100,18 +84,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = extractToken(req, rpc);
-    const secretKey = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
-
-    if (!token || token !== secretKey) {
+    const authUser = await getScrapioUserOrApiKey(req, rpc);
+    if (!authUser) {
       return NextResponse.json(
         {
           jsonrpc: "2.0",
-          id: rpc.id || null,
+          id: rpc?.id || null,
           error: {
             code: -32000,
             message:
-              "No autorizado. Se requiere API Key válida vía 'Authorization: Bearer <KEY>', 'X-API-Key' o parámetro '?key=<KEY>'.",
+              "No autorizado. Se requiere Scrapio API Key válida vía 'Authorization: Bearer <KEY>', 'X-API-Key' o parámetro '?key=<KEY>'.",
           },
         },
         { status: 401, headers: CORS_HEADERS }
@@ -170,14 +152,22 @@ export async function POST(req: NextRequest) {
 
       if (toolName === "list_scraped_sites") {
         const stats = await getIndexStats();
-        const list = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
+        let list = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
           name,
           slug: name.toLowerCase().replace(/\s+/g, "-"),
           vectorCount: data.recordCount || 0,
         }));
 
+        if (!authUser.isAdmin) {
+          list = list.filter((s) => isNamespaceAllowed(authUser, s.name));
+        }
+
+        const totalVectors = authUser.isAdmin
+          ? (stats.totalRecordCount || 0)
+          : list.reduce((acc, s) => acc + s.vectorCount, 0);
+
         const resultText = [
-          `# Sitios y Espacios de Clientes Disponibles en Scrapio (${list.length} en total, ${stats.totalRecordCount} vectores):\n`,
+          `# Sitios y Espacios de Clientes Disponibles en Scrapio (${list.length} en total, ${totalVectors.toLocaleString()} vectores):\n`,
           ...list.map(
             (s, idx) =>
               `${idx + 1}. **${s.name}** (slug: \`${s.slug}\`) — ${s.vectorCount.toLocaleString()} vectores indexados`
@@ -215,13 +205,25 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              id,
+              result: {
+                content: [{ type: "text", text: `Error: No tienes permisos para consultar el cliente '${rawNamespace}'.` }],
+                isError: true,
+              },
+            },
+            { headers: CORS_HEADERS }
+          );
+        }
+
         const resolvedNs = await resolvePineconeNamespace(rawNamespace);
         const queryVector = await generateEmbedding(query);
         const matches = await queryPinecone(resolvedNs, queryVector, topK);
 
         if (matches.length === 0) {
-          const stats = await getIndexStats();
-          const available = Object.keys(stats.namespaces || {}).join(", ");
           return NextResponse.json(
             {
               jsonrpc: "2.0",
@@ -230,7 +232,7 @@ export async function POST(req: NextRequest) {
                 content: [
                   {
                     type: "text",
-                    text: `No se encontró información almacenada para el espacio '${resolvedNs}'. Espacios disponibles: ${available}`,
+                    text: `No se encontró información para la consulta en el cliente '${resolvedNs}'.`,
                   },
                 ],
               },
@@ -273,6 +275,20 @@ export async function POST(req: NextRequest) {
               id,
               result: {
                 content: [{ type: "text", text: "Error: El parámetro 'namespace' es obligatorio." }],
+                isError: true,
+              },
+            },
+            { headers: CORS_HEADERS }
+          );
+        }
+
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              id,
+              result: {
+                content: [{ type: "text", text: `Error: No tienes permisos para consultar las entidades del cliente '${rawNamespace}'.` }],
                 isError: true,
               },
             },
@@ -359,13 +375,11 @@ export async function POST(req: NextRequest) {
 
 // GET endpoint para información o Server-Sent Events (SSE)
 export async function GET(req: NextRequest) {
-  const token = extractToken(req);
-  const secretKey = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
-
-  if (!token || token !== secretKey) {
+  const authUser = await getScrapioUserOrApiKey(req);
+  if (!authUser) {
     return NextResponse.json(
       {
-        error: "No autorizado. Se requiere Scrapio API Key (?key=<TOKEN> o header Authorization: Bearer <TOKEN>).",
+        error: "No autorizado. Se requiere Scrapio API Key válida (?key=<TOKEN> o header Authorization: Bearer <TOKEN>).",
       },
       { status: 401, headers: CORS_HEADERS }
     );
@@ -394,7 +408,10 @@ export async function GET(req: NextRequest) {
 
   // Respuesta estándar con descripción del servidor MCP
   const stats = await getIndexStats();
-  const sites = Object.keys(stats.namespaces || {});
+  let sites = Object.keys(stats.namespaces || {});
+  if (!authUser.isAdmin) {
+    sites = sites.filter((ns) => isNamespaceAllowed(authUser, ns));
+  }
 
   return NextResponse.json(
     {

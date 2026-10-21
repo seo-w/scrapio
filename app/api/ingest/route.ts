@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getScrapioUser } from "@/lib/auth";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +19,31 @@ export async function POST(req: NextRequest) {
         { error: "El campo 'clientNamespace' es obligatorio." },
         { status: 400 }
       );
+    }
+
+    // Si el usuario está autenticado, asociar de inmediato este nuevo namespace a su cuenta en Clerk
+    const user = await getScrapioUser();
+    if (user && user.userId !== "master_admin") {
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(user.userId);
+        const currentMeta = (clerkUser.publicMetadata || {}) as Record<string, any>;
+        const currentNamespaces: string[] = Array.isArray(currentMeta.allowed_namespaces)
+          ? currentMeta.allowed_namespaces
+          : [];
+
+        if (!currentNamespaces.includes(clientNamespace)) {
+          const nextNamespaces = [...currentNamespaces, clientNamespace];
+          await client.users.updateUserMetadata(user.userId, {
+            publicMetadata: {
+              ...currentMeta,
+              allowed_namespaces: nextNamespaces,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn("No se pudo asociar el nuevo namespace al usuario en Clerk:", err);
+      }
     }
 
     const githubToken = process.env.GITHUB_TOKEN;

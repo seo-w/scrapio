@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getExistingIndexedUrls } from "@/lib/pinecone";
 import { fetchSitemapUrls } from "@/lib/crawler";
-import { getScrapioUser } from "@/lib/auth";
+import { getScrapioUser, isNamespaceAllowed } from "@/lib/auth";
 
 function inferDomain(namespace: string): string {
   const clean = namespace.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+    if (!isNamespaceAllowed(user, namespace)) {
       return NextResponse.json(
         { error: "No tienes permiso para ver este proyecto." },
         { status: 403 }
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (!user.isAdmin && !user.allowedNamespaces.includes(namespace)) {
+    if (!isNamespaceAllowed(user, namespace)) {
       return NextResponse.json(
         { error: "No tienes permiso para modificar este proyecto." },
         { status: 403 }

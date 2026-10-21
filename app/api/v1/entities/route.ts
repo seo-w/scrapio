@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone, resolvePineconeNamespace } from "@/lib/pinecone";
+import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,25 +16,6 @@ export async function OPTIONS() {
   });
 }
 
-function extractToken(req: NextRequest, body?: any): string {
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7).trim();
-  }
-  const xApiKey = req.headers.get("X-API-Key");
-  if (xApiKey) return xApiKey.trim();
-
-  const { searchParams } = new URL(req.url);
-  const queryKey = searchParams.get("key") || searchParams.get("apiKey") || searchParams.get("token");
-  if (queryKey) return queryKey.trim();
-
-  if (body?.apiKey && typeof body.apiKey === "string") {
-    return body.apiKey.trim();
-  }
-
-  return "";
-}
-
 async function handleEntities(req: NextRequest, isPost: boolean) {
   try {
     let body: any = {};
@@ -45,27 +27,18 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
       }
     }
 
-    const { searchParams } = new URL(req.url);
-    const token = extractToken(req, body);
-    const secretKey = process.env.SCRAPIO_API_KEY || "sk_scrapio_default_secret_key_2026";
-
-    if (!token) {
+    const authUser = await getScrapioUserOrApiKey(req, body);
+    if (!authUser) {
       return NextResponse.json(
         {
           error:
-            "No autorizado. Se requiere header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o parámetro '?key=<TOKEN>'.",
+            "No autorizado. Se requiere Scrapio API Key válida vía header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o parámetro '?key=<TOKEN>'.",
         },
         { status: 401, headers: CORS_HEADERS }
       );
     }
 
-    if (token !== secretKey) {
-      return NextResponse.json(
-        { error: "Token de autorización no válido." },
-        { status: 403, headers: CORS_HEADERS }
-      );
-    }
-
+    const { searchParams } = new URL(req.url);
     const rawNamespace = (body.namespace || searchParams.get("namespace") || "").trim();
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
     const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
@@ -74,6 +47,13 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
       return NextResponse.json(
         { error: "El parámetro 'namespace' es obligatorio." },
         { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    if (!isNamespaceAllowed(authUser, rawNamespace)) {
+      return NextResponse.json(
+        { error: `No tienes permisos para consultar las entidades del namespace '${rawNamespace}'.` },
+        { status: 403, headers: CORS_HEADERS }
       );
     }
 

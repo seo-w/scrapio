@@ -1,4 +1,5 @@
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server";
+import crypto from "crypto";
 
 export interface ScrapioAuthUser {
   userId: string;
@@ -8,10 +9,11 @@ export interface ScrapioAuthUser {
   allowedNamespaces: string[];
   canUseOpenAI: boolean;
   canUseGemini: boolean;
+  apiKey: string;
 }
 
 /**
- * Obtiene el usuario autenticado con sus roles y permisos
+ * Obtiene el usuario autenticado con sus roles, permisos y Scrapio API Key única
  */
 export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
   try {
@@ -26,45 +28,185 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
       user.emailAddresses?.[0]?.emailAddress ||
       "";
 
-  const adminEmail = (process.env.ADMIN_EMAIL || "avraxas@gmail.com").toLowerCase();
-  const isDefaultAdminEmail = primaryEmail.toLowerCase() === adminEmail;
-  const isRoleAdmin = user.publicMetadata?.role === "admin";
-  const isAdmin = isDefaultAdminEmail || isRoleAdmin;
+    const adminEmail = (process.env.ADMIN_EMAIL || "avraxas@gmail.com").toLowerCase();
+    const isDefaultAdminEmail = primaryEmail.toLowerCase() === adminEmail;
+    const isRoleAdmin = user.publicMetadata?.role === "admin";
+    const isAdmin = isDefaultAdminEmail || isRoleAdmin;
 
-  // Auto-promover a admin en Clerk si coincide con el correo administrador
-  if (isDefaultAdminEmail && (!isRoleAdmin || !user.publicMetadata?.can_use_openai)) {
-    try {
-      const client = await clerkClient();
-      await client.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...user.publicMetadata,
-          role: "admin",
-          can_use_openai: true,
-        },
-      });
-    } catch (err) {
-      console.warn("No se pudo auto-actualizar metadata de admin en Clerk:", err);
+    let apiKey = (user.publicMetadata?.scrapio_api_key as string) || "";
+    let shouldUpdateClerk = false;
+    const currentMeta = (user.publicMetadata || {}) as Record<string, any>;
+    const updatedMeta: Record<string, any> = { ...currentMeta };
+
+    // Si el usuario aún no tiene su Scrapio API Key personal única, generarla
+    if (!apiKey) {
+      apiKey = `sk_scrapio_${userId}_${crypto.randomBytes(12).toString("hex")}`;
+      updatedMeta.scrapio_api_key = apiKey;
+      shouldUpdateClerk = true;
     }
-  }
 
-  const allowedNamespaces = Array.isArray(user.publicMetadata?.allowed_namespaces)
-    ? (user.publicMetadata.allowed_namespaces as string[])
-    : [];
+    // Auto-promover a admin en Clerk si coincide con el correo administrador
+    if (isDefaultAdminEmail && (!isRoleAdmin || !user.publicMetadata?.can_use_openai)) {
+      updatedMeta.role = "admin";
+      updatedMeta.can_use_openai = true;
+      shouldUpdateClerk = true;
+    }
 
-  const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
-  const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
+    if (shouldUpdateClerk) {
+      try {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(userId, {
+          publicMetadata: updatedMeta,
+        });
+      } catch (err) {
+        console.warn("No se pudo auto-actualizar metadata en Clerk:", err);
+      }
+    }
 
-  return {
-    userId,
-    email: primaryEmail,
-    name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || primaryEmail,
-    isAdmin,
-    allowedNamespaces,
-    canUseOpenAI,
-    canUseGemini,
-  };
+    const allowedNamespaces = Array.isArray(user.publicMetadata?.allowed_namespaces)
+      ? (user.publicMetadata.allowed_namespaces as string[])
+      : [];
+
+    const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
+    const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
+
+    return {
+      userId,
+      email: primaryEmail,
+      name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || primaryEmail,
+      isAdmin,
+      allowedNamespaces,
+      canUseOpenAI,
+      canUseGemini,
+      apiKey,
+    };
   } catch (err) {
     console.warn("Error resolviendo usuario de Clerk en getScrapioUser:", err);
     return null;
   }
+}
+
+/**
+ * Extrae token de API Key desde cabeceras HTTP, parámetros de URL o cuerpo de la petición
+ */
+export function extractTokenFromRequest(req: Request, body?: any): string {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.substring(7).trim();
+  }
+
+  const xApiKey = req.headers.get("X-API-Key") || req.headers.get("x-api-key");
+  if (xApiKey) return xApiKey.trim();
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const queryKey = searchParams.get("key") || searchParams.get("apiKey") || searchParams.get("token");
+    if (queryKey) return queryKey.trim();
+  } catch {}
+
+  if (body?.apiKey && typeof body.apiKey === "string") {
+    return body.apiKey.trim();
+  }
+
+  return "";
+}
+
+/**
+ * Valida un token Scrapio API Key (Master Key o clave única de usuario sk_scrapio_user_XXXXX_YYYYYY)
+ */
+export async function validateScrapioApiKey(token: string): Promise<ScrapioAuthUser | null> {
+  if (!token || typeof token !== "string") return null;
+  const cleanToken = token.trim();
+
+  // 1. Master Server Key (entorno / CI/CD)
+  const masterKey = process.env.SCRAPIO_API_KEY;
+  if (masterKey && cleanToken === masterKey.trim()) {
+    return {
+      userId: "master_admin",
+      email: process.env.ADMIN_EMAIL || "avraxas@gmail.com",
+      name: "Master Admin",
+      isAdmin: true,
+      allowedNamespaces: ["*"],
+      canUseOpenAI: true,
+      canUseGemini: true,
+      apiKey: masterKey,
+    };
+  }
+
+  // 2. Clave de usuario única: sk_scrapio_user_..._...
+  const match = cleanToken.match(/^sk_scrapio_(user_[a-zA-Z0-9]+)_[a-f0-9]+$/);
+  if (!match) {
+    return null;
+  }
+
+  const userId = match[1];
+
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    if (!user) return null;
+
+    const storedKey = user.publicMetadata?.scrapio_api_key as string | undefined;
+    if (!storedKey || storedKey !== cleanToken) {
+      return null;
+    }
+
+    const primaryEmail =
+      user.emailAddresses?.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ||
+      user.emailAddresses?.[0]?.emailAddress ||
+      "";
+
+    const adminEmail = (process.env.ADMIN_EMAIL || "avraxas@gmail.com").toLowerCase();
+    const isDefaultAdminEmail = primaryEmail.toLowerCase() === adminEmail;
+    const isRoleAdmin = user.publicMetadata?.role === "admin";
+    const isAdmin = isDefaultAdminEmail || isRoleAdmin;
+
+    const allowedNamespaces = Array.isArray(user.publicMetadata?.allowed_namespaces)
+      ? (user.publicMetadata.allowed_namespaces as string[])
+      : [];
+
+    const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
+    const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
+
+    return {
+      userId: user.id,
+      email: primaryEmail,
+      name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || primaryEmail,
+      isAdmin,
+      allowedNamespaces,
+      canUseOpenAI,
+      canUseGemini,
+      apiKey: storedKey,
+    };
+  } catch (err) {
+    console.error("Error validando Scrapio API Key con Clerk:", err);
+    return null;
+  }
+}
+
+/**
+ * Autentica una solicitud mediante Scrapio API Key O sesión activa de Clerk
+ */
+export async function getScrapioUserOrApiKey(req: Request, body?: any): Promise<ScrapioAuthUser | null> {
+  const token = extractTokenFromRequest(req, body);
+  if (token) {
+    const authFromKey = await validateScrapioApiKey(token);
+    if (authFromKey) return authFromKey;
+  }
+  return await getScrapioUser();
+}
+
+/**
+ * Comprueba si el usuario tiene permiso para acceder a un namespace dado
+ */
+export function isNamespaceAllowed(user: ScrapioAuthUser, namespace: string): boolean {
+  if (!namespace) return false;
+  if (user.isAdmin) return true;
+  if (user.allowedNamespaces.includes("*")) return true;
+
+  const clean = (s: string) =>
+    s.toLowerCase().replace(/^cliente[-_]/, "").replace(/[-_]/g, " ").trim();
+  const allowedClean = (user.allowedNamespaces || []).map(clean);
+
+  return allowedClean.includes(clean(namespace));
 }

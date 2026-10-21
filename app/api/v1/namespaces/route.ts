@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getIndexStats } from "@/lib/pinecone";
+import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,20 +16,47 @@ export async function OPTIONS() {
   });
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    // Obtener estadísticas de Pinecone en tiempo real (público para LLMs, bots y agentes)
+    const user = await getScrapioUserOrApiKey(req);
+    if (!user) {
+      return NextResponse.json(
+        {
+          error:
+            "No autorizado. Se requiere Scrapio API Key (?key=<TOKEN> o header 'Authorization: Bearer <TOKEN>').",
+        },
+        {
+          status: 401,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+
+    // Obtener estadísticas de Pinecone en tiempo real
     const stats = await getIndexStats();
 
-    const namespacesList = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
+    let namespacesList = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
       name,
       slug: name.toLowerCase().replace(/\s+/g, "-"),
       vectorCount: data.recordCount || 0,
     }));
 
+    // Si el usuario no es admin, filtrar estrictamente para ver solo sus namespaces asignados
+    if (!user.isAdmin) {
+      namespacesList = namespacesList.filter((ns) =>
+        isNamespaceAllowed(user, ns.name)
+      );
+    }
+
+    const totalVectors = user.isAdmin
+      ? (stats.totalRecordCount || 0)
+      : namespacesList.reduce((acc, ns) => acc + ns.vectorCount, 0);
+
     return NextResponse.json(
       {
-        totalVectors: stats.totalRecordCount || 0,
+        totalVectors,
         dimension: stats.dimension || 768,
         namespaces: namespacesList,
       },

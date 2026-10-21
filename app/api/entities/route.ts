@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone } from "@/lib/pinecone";
+import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const user = await getScrapioUserOrApiKey(req);
+  if (!user) {
+    return NextResponse.json({ error: "No autorizado. Inicia sesión o proporciona tu Scrapio API Key." }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const namespace = searchParams.get("namespace");
   const aiProvider = searchParams.get("aiProvider") || undefined;
 
   if (!namespace) {
     return NextResponse.json(
-      { error: "El parámetro 'namespace' es obligatorio en la URL (ej. ?namespace=cliente-avafin)." },
+      { error: "El parámetro 'namespace' es obligatorio en la URL." },
       { status: 400 }
+    );
+  }
+
+  if (!isNamespaceAllowed(user, namespace)) {
+    return NextResponse.json(
+      { error: `No tienes permisos para consultar el namespace '${namespace}'.` },
+      { status: 403 }
     );
   }
 
@@ -19,6 +32,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getScrapioUserOrApiKey(req);
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado. Inicia sesión o proporciona tu Scrapio API Key." }, { status: 401 });
+    }
+
     const body = await req.json();
     const { namespace, aiProvider } = body;
 
@@ -26,6 +44,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "El campo 'namespace' es obligatorio." },
         { status: 400 }
+      );
+    }
+
+    if (!isNamespaceAllowed(user, namespace)) {
+      return NextResponse.json(
+        { error: `No tienes permisos para consultar el namespace '${namespace}'.` },
+        { status: 403 }
       );
     }
 

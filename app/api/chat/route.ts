@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone } from "@/lib/pinecone";
-import { getScrapioUser } from "@/lib/auth";
+import { getScrapioUser, isNamespaceAllowed } from "@/lib/auth";
 import { rerankHybridChunks } from "@/lib/hybrid";
 
 export async function POST(req: NextRequest) {
@@ -28,11 +28,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Validar acceso al namespace (multi-tenant isolation con coincidencia tolerante)
-    const clean = (s: string) => s.toLowerCase().replace(/^cliente[-_]/, "").replace(/[-_]/g, " ").trim();
-    const allowedClean = (user.allowedNamespaces || []).map(clean);
-
-    if (!user.isAdmin && !allowedClean.includes(clean(namespace))) {
+    // 1. Validar acceso al namespace (multi-tenant isolation)
+    if (!isNamespaceAllowed(user, namespace)) {
       return NextResponse.json(
         { error: `No tienes permisos para consultar el proyecto/namespace '${namespace}'.` },
         { status: 403 }
