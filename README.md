@@ -20,6 +20,30 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-21 — Feat: Aislamiento estricto multi-tenant (cuentas limpias) + Scrapio API Keys individuales únicas por usuario
+
+**Problema resuelto:** 
+1. Al registrarse un usuario nuevo, la interfaz inicializaba el estado en `"cliente-avafin"`, el contador del sidebar mostraba `1` por defecto (`availableNamespaces.length || 1`), y se mostraban 4,812 vectores residuales, haciendo parecer que la cuenta compartía datos con otros clientes.
+2. En la sección de *Integraciones*, todos los usuarios veían la misma clave global (`sk_scrapio_default_secret_key_2026`), permitiendo que cualquier persona o integración externa consultara namespaces ajenos sin restricción.
+
+**Mejoras implementadas:**
+1. **Cuentas 100% limpias e independientes (0 Namespaces por defecto):**
+   * El estado del frontend (`namespace`) se inicializa vacío `""` y el contador de clientes refleja fielmente `0`.
+   * Se eliminaron todos los fallbacks fijos (`cliente-avafin`, `Personal Bliss`, y el conteo falso de 4,812 vectores). Si la cuenta no tiene proyectos asignados, muestra `0 páginas · 0 vectores`.
+   * En el sidebar, el bloque *"Contexto de cliente"* muestra `--` y *"Sin cliente asignado"*. El botón `+ Nuevo espacio de cliente` ahora está habilitado para todos los usuarios.
+   * La vista de chat y el selector de proyectos cuentan con estados vacíos dedicados que guían al usuario a rastrear su primer sitio web.
+   * Al indexar un nuevo sitio mediante `POST /api/ingest`, el namespace creado se asocia de forma automática e inmediata a los `allowed_namespaces` del usuario en Clerk.
+2. **Scrapio API Keys únicas por usuario:**
+   * Cada usuario recibe de forma automática una Scrapio API Key personal única persistida en sus metadatos de Clerk: `sk_scrapio_<userId>_<randomHash>`.
+   * Se añadió el endpoint `POST /api/me` y un botón **"Regenerar"** en la interfaz para que el usuario pueda renovar su clave en cualquier momento.
+   * La función `validateScrapioApiKey` identifica al usuario dueño de la clave y restringe sus consultas en la API únicamente a sus namespaces autorizados. La clave maestra de servidor (`SCRAPIO_API_KEY`) se mantiene exclusivamente para tareas de administrador y CI/CD.
+3. **Inyección dinámica en todos los prompts y templates:**
+   * El modal de Integraciones (Prompt Directo, Custom GPTs, Claude MCP, cURL, n8n/Make) inserta dinámicamente la clave personal del usuario y su namespace activo (o `<tu_cliente_o_namespace>`).
+   * El endpoint `/api/v1/namespaces?key=...` ahora exige autenticación y devuelve única y exclusivamente los proyectos del usuario solicitante (si tiene 0, devuelve 0).
+   * Al consultar `/api/v1/query` o MCP `query_site`, si el usuario intenta acceder a un namespace que no le pertenece, la API responde con `403 Forbidden`.
+
+---
+
 ### 2026-10-17 — Feat: Control granular independiente de Gemini y OpenAI por usuario + Tolerancia de namespaces
 
 **Mejoras implementadas:**
@@ -315,7 +339,7 @@ Utiliza el script independiente [`scripts/mcp-server.mjs`](file:///c:/Users/seo_
       "args": ["scripts/mcp-server.mjs"],
       "env": {
         "SCRAPIO_API_URL": "https://scrapio-one.vercel.app",
-        "SCRAPIO_API_KEY": "sk_scrapio_default_secret_key_2026"
+        "SCRAPIO_API_KEY": "<TU_SCRAPIO_API_KEY_PERSONAL>"
       }
     }
   }
