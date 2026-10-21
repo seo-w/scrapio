@@ -36,6 +36,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
         {
           error:
             "No autorizado. Se requiere Scrapio API Key válida vía header 'Authorization: Bearer <TOKEN>', 'X-API-Key' o parámetro '?key=<TOKEN>'.",
+          hint: "Obtén o regenera tu Scrapio API Key única en el panel de Integraciones de Scrapio.",
         },
         { status: 401, headers: CORS_HEADERS }
       );
@@ -74,7 +75,12 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     // Validar aislamiento del namespace por usuario
     if (!isNamespaceAllowed(authUser, namespace)) {
       return NextResponse.json(
-        { error: `No tienes permisos para consultar el cliente/namespace '${namespace}' con esta API Key.` },
+        {
+          error: `No tienes permisos para consultar el cliente/namespace '${namespace}' con esta API Key.`,
+          hint: authUser.allowedNamespaces.length === 0
+            ? "Tu cuenta aún no tiene espacios de cliente asignados. Indexa un nuevo sitio o solicita asignación al administrador."
+            : `Namespaces autorizados para tu cuenta: [${authUser.allowedNamespaces.join(", ")}].`,
+        },
         { status: 403, headers: CORS_HEADERS }
       );
     }

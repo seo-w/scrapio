@@ -24,11 +24,14 @@ export async function GET(req: NextRequest) {
         {
           error:
             "No autorizado. Se requiere Scrapio API Key (?key=<TOKEN> o header 'Authorization: Bearer <TOKEN>').",
+          hint: "Si eres usuario de Scrapio, obtén tu clave única personal en el menú 'Integraciones & API' de la plataforma.",
         },
         {
           status: 401,
           headers: {
             "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
           },
         }
       );

@@ -378,6 +378,33 @@ Utiliza el script independiente [`scripts/mcp-server.mjs`](file:///c:/Users/seo_
 
 ---
 
+## 🔒 Diagnóstico de Seguridad, Aislamiento y Respuestas HTTP 4xx
+
+### 1. ¿Por qué Clerk muestra "Development Mode" en la interfaz?
+* El proyecto está configurado actualmente con credenciales del entorno de pruebas gratuito de Clerk (`pk_test_...` y `sk_test_...` bajo el dominio `*.clerk.accounts.dev`).
+* Esto indica que la instancia está en modo de desarrollo (`Development instance`), lo cual habilita el distintivo "Development mode" en los componentes de interfaz de Clerk y permite cuentas de prueba.
+* Para producción oficial se crea una instancia en el Dashboard de Clerk con llaves `pk_live_...` y dominio personalizado (ej. `auth.tudominio.com`).
+
+### 2. ¿Por qué los llamados al API devuelven errores 4xx?
+Los errores `4xx` indican que la solicitud del cliente no cumple con los requisitos de autenticación o permisos del sistema multitenant:
+1. **Error 401 Unauthorized**:
+   * Ocurre si se consulta `GET /api/v1/namespaces` o `POST /api/v1/query` **sin proveer un token** (o con un token inválido).
+   * Cuando ChatGPT o un navegador accede directamente a la URL plana sin cabecera `Authorization: Bearer <TOKEN>` ni parámetro `?key=<TOKEN>`, el servidor rechaza la solicitud para proteger la privacidad de los clientes indexados.
+2. **Error 403 Forbidden**:
+   * Ocurre cuando un usuario intenta consultar con su API Key un cliente o namespace **al cual no tiene acceso** (ej. un usuario nuevo con 0 clientes asignados que intenta consultar `cliente-avafin`).
+   * El sistema devuelve un mensaje explicativo y un campo `hint` indicando que su cuenta no tiene permisos sobre ese espacio.
+3. **Error 400 Bad Request**:
+   * Ocurre si falta el campo obligatorio `query` o `namespace`, o si el cuerpo JSON está malformado.
+
+### 3. Autenticación Resiliente y Extracción de Claves
+* El helper `extractTokenFromRequest` busca de forma flexible en:
+  * Cabecera `Authorization: Bearer <TOKEN>`
+  * Cabecera `X-API-Key: <TOKEN>`
+  * Parámetros de URL: `?key=`, `?apiKey=`, `?token=`, `?api_key=`
+  * Campos del JSON body: `apiKey`, `api_key`, `key`, `token`
+* Validación tolerante de claves personales `sk_scrapio_<userId>_<suffix>` y compatibilidad garantizada con la clave maestra `SCRAPIO_API_KEY`.
+* Sincronización reactiva en el frontend: en cuanto Clerk inicializa la sesión en el navegador, se consultan automáticamente `/api/me` y `/api/namespaces` sin riesgo de estados desincronizados.
+
 ## 🏗️ Estructura del Proyecto
 
 ```

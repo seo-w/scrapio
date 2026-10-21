@@ -363,7 +363,7 @@ export default function Home() {
   };
 
   // Estado de Usuario Autenticado y Permisos
-  const { user: clerkUser } = useUser();
+  const { user: clerkUser, isLoaded: isClerkLoaded, isSignedIn } = useUser();
   const [currentUserInfo, setCurrentUserInfo] = useState<{
     userId?: string;
     email: string;
@@ -621,6 +621,14 @@ export default function Home() {
       }
     }
   }, []);
+
+  // Sincronizar namespaces y perfil en cuanto Clerk termina de cargar la sesión activa
+  useEffect(() => {
+    if (isClerkLoaded && isSignedIn) {
+      fetchUserInfo();
+      fetchNamespaces();
+    }
+  }, [isClerkLoaded, isSignedIn]);
 
   useEffect(() => {
     if (!isPollingStatus) return;
@@ -1031,6 +1039,9 @@ export default function Home() {
             <button
               onClick={() => {
                 setIsMobileSidebarOpen(false);
+                if (!scrapioApiKey) {
+                  fetchUserInfo();
+                }
                 setIsDocsModalOpen(true);
               }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-slate-700 hover:bg-slate-200/50 font-semibold text-base transition-colors cursor-pointer"
@@ -2245,7 +2256,7 @@ export default function Home() {
                       <div className="space-y-4">
                         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
                           <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-bold text-slate-900">Ejemplo cURL / API REST</h4>
+                            <h4 className="text-sm font-bold text-slate-900">Ejemplo cURL / API REST (Bash & macOS)</h4>
                             <button
                               onClick={() =>
                                 copyToClipboard(`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${activeApiKey}" \\\n  -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${activeNamespacePrompt}"}'`)
@@ -2256,14 +2267,42 @@ export default function Home() {
                               <span>Copiar cURL</span>
                             </button>
                           </div>
-                          <p className="text-sm text-slate-600">
-                            Consulta directa por terminal o script para el namespace <strong>{activeNamespacePrompt}</strong>:
-                          </p>
                           <div className="bg-slate-900 text-emerald-300 p-4 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
                             <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${activeApiKey}" \\
   -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${activeNamespacePrompt}"}'`}</pre>
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-slate-900">Ejemplo Python (requests)</h4>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(`import requests\n\nres = requests.post(\n    "https://scrapio-one.vercel.app/api/v1/query",\n    headers={\n        "Authorization": "Bearer ${activeApiKey}",\n        "Content-Type": "application/json"\n    },\n    json={\n        "query": "¿Cuáles son las condiciones?",\n        "namespace": "${activeNamespacePrompt}"\n    }\n)\nprint(res.json()["answer"])`)
+                              }
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                            >
+                              {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>Copiar Python</span>
+                            </button>
+                          </div>
+                          <div className="bg-slate-900 text-blue-300 p-4 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
+                            <pre>{`import requests
+
+res = requests.post(
+    "https://scrapio-one.vercel.app/api/v1/query",
+    headers={
+        "Authorization": "Bearer ${activeApiKey}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "query": "¿Cuáles son las condiciones?",
+        "namespace": "${activeNamespacePrompt}"
+    }
+)
+print(res.json()["answer"])`}</pre>
                           </div>
                         </div>
                       </div>

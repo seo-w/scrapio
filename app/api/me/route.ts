@@ -10,10 +10,18 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    return NextResponse.json({
-      user,
-      apiKey: user.apiKey,
-    });
+    return NextResponse.json(
+      {
+        user,
+        apiKey: user.apiKey,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          "Pragma": "no-cache",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Error en /api/me:", error);
     return NextResponse.json(
