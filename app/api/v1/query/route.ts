@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone, resolvePineconeNamespace, getIndexStats } from "@/lib/pinecone";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
+import { rerankHybridChunks } from "@/lib/hybrid";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,7 +47,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     const query = (body.query || searchParams.get("query") || "").trim();
     const namespace = (body.namespace || searchParams.get("namespace") || "").trim();
     const topKRaw = body.topK || searchParams.get("topK");
-    const topK = Math.min(20, Math.max(1, parseInt(String(topKRaw || "6"), 10) || 6));
+    const topK = Math.min(20, Math.max(1, parseInt(String(topKRaw || "10"), 10) || 10));
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
     const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
 
@@ -106,8 +107,9 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     // 2. Vectorizar la consulta
     const queryVector = await generateEmbedding(query, aiProvider, 3, customApiKey);
 
-    // 3. Query Pinecone
-    const matches = await queryPinecone(resolvedNs, queryVector, topK);
+    // 3. Query Pinecone con ventana amplia de candidatos para re-ranking híbrido
+    const candidatePoolSize = Math.max(topK * 4, 40);
+    const matches = await queryPinecone(resolvedNs, queryVector, candidatePoolSize);
 
     if (matches.length === 0) {
       const stats = await getIndexStats();
@@ -127,13 +129,10 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
       );
     }
 
-    const contextChunks: ContextChunk[] = matches.map((match) => ({
-      url: match.metadata.url,
-      h1: match.metadata.h1,
-      text: match.metadata.text_chunk,
-    }));
+    // 4. Aplicar Re-ranking Híbrido léxico + semántico
+    const contextChunks: ContextChunk[] = rerankHybridChunks(query, matches, topK);
 
-    // 4. Generar RAG sintetizado con IA
+    // 5. Generar RAG sintetizado con IA
     const { text, sources } = await generateRAGResponse(query, contextChunks, aiProvider, customApiKey);
 
     return NextResponse.json(

@@ -57,11 +57,44 @@ export async function GET(req: NextRequest) {
       ? (stats.totalRecordCount || 0)
       : namespacesList.reduce((acc, ns) => acc + ns.vectorCount, 0);
 
+    const baseUrl =
+      process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
+
     return NextResponse.json(
       {
+        status: "success",
         totalVectors,
         dimension: stats.dimension || 768,
-        namespaces: namespacesList,
+        queryEndpoint: `${baseUrl}/api/v1/query`,
+        apiUsage: {
+          description:
+            "Para realizar consultas RAG citando fuentes sobre cualquier cliente, realiza una petición GET o POST al queryEndpoint.",
+          method: "GET | POST",
+          exampleGet: `${baseUrl}/api/v1/query?key=<TU_KEY>&namespace=${namespacesList[0]?.name || "Avafin"}&query=¿Cuales+son+las+condiciones?`,
+          examplePost: {
+            url: `${baseUrl}/api/v1/query`,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer <TU_KEY>",
+            },
+            body: {
+              namespace: namespacesList[0]?.name || "Avafin",
+              query: "Tu pregunta aquí",
+              topK: 10,
+            },
+          },
+          parameters: {
+            key: "Scrapio API Key obligatoria (?key= en GET o cabecera Authorization: Bearer en POST)",
+            namespace: "Nombre del cliente/sitio web (ej. 'Avafin', 'Internexa', etc.)",
+            query: "La pregunta o tema a investigar",
+            topK: "Número de fragmentos relevantes a recuperar (opcional, default: 10, max: 20)",
+            aiProvider: "Proveedor de IA para sintetizar ('gemini' u 'openai', opcional)",
+          },
+        },
+        namespaces: namespacesList.map((ns) => ({
+          ...ns,
+          queryUrl: `${baseUrl}/api/v1/query?namespace=${encodeURIComponent(ns.name)}`,
+        })),
       },
       {
         headers: {

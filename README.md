@@ -405,6 +405,12 @@ Los errores `4xx` indican que la solicitud del cliente no cumple con los requisi
 * Validación tolerante de claves personales `sk_scrapio_<userId>_<suffix>` y compatibilidad garantizada con la clave maestra `SCRAPIO_API_KEY`.
 * Sincronización reactiva en el frontend: en cuanto Clerk inicializa la sesión en el navegador, se consultan automáticamente `/api/me` y `/api/namespaces` sin riesgo de estados desincronizados.
 
+### 4. Auto-descubrimiento HATEOAS, Re-ranking Híbrido y Rigor en Síntesis RAG
+* **HATEOAS en `/api/v1/namespaces`**: El endpoint de listado ahora devuelve en su respuesta JSON la propiedad `queryEndpoint`, `apiUsage` con ejemplos `GET` y `POST`, y la URL directa `queryUrl` para cada cliente. Esto permite que cualquier IA externa (ChatGPT, Claude, Perplexity) sepa exactamente a qué URL y con qué parámetros consultar el contenido sin tener que adivinar o recibir errores 400.
+* **Re-ranking Híbrido en `/api/v1/query`**: Se amplió el pool de candidatos en Pinecone a 40 fragmentos y se incorporó `rerankHybridChunks` con normalización fonética (`c/s/z`, acentos) y boosting léxico para acrónimos (ej: CONDUSEF, SIPRES, PROFECO), números y términos en H1 y URLs.
+* **Eliminación de la falacia de exhaustividad en el LLM**: Se actualizó el prompt de sistema para que el modelo nunca afirme categóricamente que "el cliente no tiene relación ni mención con X" cuando X simplemente no apareció en el contexto recuperado; ahora aclara con precisión epistemológica que en los fragmentos recuperados en esa consulta puntual no consta información al respecto.
+* **Diagnóstico de Vectores Multi-Modelo**: Si un namespace contiene vectores generados por diferentes proveedores (ej. OpenAI `text-embedding-3-small` vs Gemini `gemini-embedding-001`), los espacios geométricos no son conmensurables directamente. Se recomienda homogeneizar las ingestas bajo un mismo proveedor o habilitar BYOK con el proveedor original para máxima fidelidad semántica.
+
 ## 🏗️ Estructura del Proyecto
 
 ```

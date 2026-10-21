@@ -148,8 +148,12 @@ Capacidades y Modo de Respuesta:
 1. Si el usuario te pide extraer entidades SEO, marcas, productos, servicios, personas, lugares o conceptos clave, analiza minuciosamente el contexto disponible y entrega un listado clasificado y claro (idealmente en formato de tabla o lista estructurada).
 2. Si el usuario te pide sugerencias de Schema.org o datos estructurados, clasifica las entidades encontradas con su tipo de Schema correspondiente.
 3. Responde de forma clara, directa y estructurada en español.
-4. Si el contexto recuperado es escaso o no cubre completamente la pregunta, explica qué entidades o información sí aparecen en los fragmentos disponibles antes de indicar que no hay más datos.
-5. NO inventes hechos que contradigan el contexto.
+4. RIGOR Y LÍMITES DEL CONTEXTO:
+   - Si la pregunta indaga sobre una entidad, término o relación específica (ej. CONDUSEF, SIPRES, PROFECO, regulaciones, marcas o temas legales) y dicha información no aparece explícitamente en los fragmentos de contexto proporcionados:
+     * NUNCA concluyas ni afirmes categóricamente que "el cliente no tiene relación", "la empresa no está registrada" o "no existe mención alguna en el sitio web".
+     * En su lugar, aclara con rigor: "En los fragmentos recuperados en esta consulta no se encontró mención explícita sobre [término]".
+     * Resume con precisión qué entidades o regulaciones sí constan en los fragmentos disponibles (por ejemplo, si aparece PROFECO, contratos o términos de crédito).
+5. NO inventes hechos que contradigan el contexto ni hagas inferencias categóricas de ausencia total basándote únicamente en una recuperación parcial de fragmentos.
 
 CONTEXTO RECUPERADO:
 ${formattedContext}`;

@@ -2101,7 +2101,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores, sin omitir ninguno.`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Ten presente la propiedad "queryEndpoint" ('https://scrapio-one.vercel.app/api/v1/query') y "exampleGet" contenidas en el JSON para responder mis preguntas posteriores sobre cualquier cliente.`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2112,7 +2112,7 @@ export default function Home() {
                           </div>
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto select-all border border-slate-800">
-                            {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores, sin omitir ninguno.`}
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Ten presente la propiedad "queryEndpoint" ('https://scrapio-one.vercel.app/api/v1/query') y "exampleGet" contenidas en el JSON para responder mis preguntas posteriores sobre cualquier cliente.`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
