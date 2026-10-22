@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
 
     const baseUrl =
       process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
+    const userApiKey = user.apiKey || "";
 
     return NextResponse.json(
       {
@@ -68,14 +69,16 @@ export async function GET(req: NextRequest) {
         queryEndpoint: `${baseUrl}/api/v1/query`,
         apiUsage: {
           description:
-            "Para realizar consultas RAG citando fuentes sobre cualquier cliente, realiza una petición GET o POST al queryEndpoint.",
+            "Para realizar consultas RAG citando fuentes sobre cualquier cliente, realiza una petición GET (recomendado para bots y agentes web) o POST al queryEndpoint.",
           method: "GET | POST",
-          exampleGet: `${baseUrl}/api/v1/query?key=<TU_KEY>&namespace=${namespacesList[0]?.name || "Avafin"}&query=¿Cuales+son+las+condiciones?`,
+          fetchGuidance:
+            "Tu herramienta de navegación web/fetch puede consultar directamente mediante GET usando la propiedad 'queryUrl' de cada namespace y añadiendo '&query=<tu_pregunta>'. No se requiere POST.",
+          exampleGet: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(namespacesList[0]?.name || "Avafin")}&query=que+relacion+tiene+con+condusef`,
           examplePost: {
             url: `${baseUrl}/api/v1/query`,
             headers: {
               "Content-Type": "application/json",
-              Authorization: "Bearer <TU_KEY>",
+              Authorization: `Bearer ${userApiKey}`,
             },
             body: {
               namespace: namespacesList[0]?.name || "Avafin",
@@ -84,7 +87,7 @@ export async function GET(req: NextRequest) {
             },
           },
           parameters: {
-            key: "Scrapio API Key obligatoria (?key= en GET o cabecera Authorization: Bearer en POST)",
+            key: "Scrapio API Key (?key= en GET o cabecera Authorization: Bearer en POST)",
             namespace: "Nombre del cliente/sitio web (ej. 'Avafin', 'Internexa', etc.)",
             query: "La pregunta o tema a investigar",
             topK: "Número de fragmentos relevantes a recuperar (opcional, default: 10, max: 20)",
@@ -93,7 +96,7 @@ export async function GET(req: NextRequest) {
         },
         namespaces: namespacesList.map((ns) => ({
           ...ns,
-          queryUrl: `${baseUrl}/api/v1/query?namespace=${encodeURIComponent(ns.name)}`,
+          queryUrl: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(ns.name)}`,
         })),
       },
       {
