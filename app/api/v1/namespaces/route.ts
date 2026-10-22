@@ -67,31 +67,15 @@ export async function GET(req: NextRequest) {
         totalVectors,
         dimension: stats.dimension || 768,
         queryEndpoint: `${baseUrl}/api/v1/query`,
-        apiUsage: {
-          description:
-            "Para realizar consultas RAG citando fuentes sobre cualquier cliente, realiza una petición GET (recomendado para bots y agentes web) o POST al queryEndpoint.",
-          method: "GET | POST",
-          fetchGuidance:
-            "Tu herramienta de navegación web/fetch puede consultar directamente mediante GET usando la propiedad 'queryUrl' de cada namespace y añadiendo '&query=<tu_pregunta>'. No se requiere POST.",
-          exampleGet: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(namespacesList[0]?.name || "Avafin")}&query=que+relacion+tiene+con+condusef`,
-          examplePost: {
-            url: `${baseUrl}/api/v1/query`,
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${userApiKey}`,
-            },
-            body: {
-              namespace: namespacesList[0]?.name || "Avafin",
-              query: "Tu pregunta aquí",
-              topK: 10,
-            },
-          },
+        api: {
+          queryEndpoint: `${baseUrl}/api/v1/query`,
+          method: "GET",
+          example: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(namespacesList[0]?.name || "Avafin")}&query=condusef+sipres`,
           parameters: {
-            key: "Scrapio API Key (?key= en GET o cabecera Authorization: Bearer en POST)",
-            namespace: "Nombre del cliente/sitio web (ej. 'Avafin', 'Internexa', etc.)",
-            query: "La pregunta o tema a investigar",
-            topK: "Número de fragmentos relevantes a recuperar (opcional, default: 10, max: 20)",
-            aiProvider: "Proveedor de IA para sintetizar ('gemini' u 'openai', opcional)",
+            key: "string (Scrapio API Key)",
+            namespace: "string (Nombre del cliente/sitio web)",
+            query: "string (Pregunta o tema con espacios codificados con '+' o '%20')",
+            topK: "number (Opcional, 1 a 20 fragmentos, default 10)",
           },
         },
         namespaces: namespacesList.map((ns) => ({

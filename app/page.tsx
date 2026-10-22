@@ -2101,7 +2101,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Ten presente la propiedad "queryEndpoint" ('https://scrapio-one.vercel.app/api/v1/query') y "exampleGet" contenidas en el JSON para responder mis preguntas posteriores sobre cualquier cliente.`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Utiliza la propiedad "queryUrl" de cada cliente para realizar consultas con tu navegador o fetch GET, agregando el parámetro &query=<pregunta_codificada_con_+>.`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2112,7 +2112,7 @@ export default function Home() {
                           </div>
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto select-all border border-slate-800">
-                            {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Ten presente la propiedad "queryEndpoint" ('https://scrapio-one.vercel.app/api/v1/query') y "exampleGet" contenidas en el JSON para responder mis preguntas posteriores sobre cualquier cliente.`}
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee el JSON completo en tiempo real. Muéstrame la lista numerada de todos los sitios encontrados en el arreglo "namespaces" con su nombre y cantidad exacta de vectores. Utiliza la propiedad "queryUrl" de cada cliente para realizar consultas con tu navegador o fetch GET, agregando el parámetro &query=<pregunta_codificada_con_+>.`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -2132,7 +2132,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lístame todos los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante tu navegador web a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<tu_pregunta_codificada> (o haz una petición POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}).\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
+                                  `Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lístame todos los clientes/sitios web disponibles.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<tu_pregunta_con_espacios_como_+_o_%20> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}).\n3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2145,7 +2145,7 @@ export default function Home() {
                           <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-line select-all border border-slate-800">
                             {`Actúa como mi asistente de investigación SEO conectado a mi plataforma Scrapio.
 1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lístame todos los clientes/sitios web disponibles.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante tu navegador web a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<tu_pregunta_codificada> (o haz una petición POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}).
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<tu_pregunta_con_espacios_como_+_o_%20> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}).
 3. Responde basándote en la información obtenida, incluyendo las fuentes citadas y destacando los banners o llamadas a la acción (CTAs) detectados.`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
