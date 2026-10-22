@@ -60,27 +60,113 @@ export async function GET(req: NextRequest) {
     const baseUrl =
       process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
     const userApiKey = user.apiKey || "";
+    const allowedNamespaceNames = namespacesList.map((ns) => ns.name);
+
+    // Definición estándar MCP (Model Context Protocol) & OpenAPI Tools
+    // Compatible nativamente con OpenAI Function Calling, Anthropic Claude Tool Use, Gemini y Cursor
+    const tools = [
+      {
+        name: "scrapio_query_client",
+        description:
+          "Executes semantic & lexical hybrid RAG search over the crawled web knowledge base of a client website. Returns synthesized answers with exact citations, source URLs, and key CTAs.",
+        method: "GET or POST",
+        endpoint: `${baseUrl}/api/v1/query`,
+        urlTemplate: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace={namespace}&query={search_terms_with_plus}`,
+        exampleUrl: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(allowedNamespaceNames[0] || "Avafin")}&query=regulaciones+condusef+sipres`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            namespace: {
+              type: "string",
+              description: "The client website namespace to query.",
+              enum: allowedNamespaceNames.length > 0 ? allowedNamespaceNames : undefined,
+            },
+            query: {
+              type: "string",
+              description:
+                "Natural language question or search topic. In GET requests, encode spaces with '+' (e.g. 'condusef+sipres').",
+            },
+            topK: {
+              type: "integer",
+              description: "Number of context fragments to inspect (default 10, max 20).",
+              default: 10,
+            },
+          },
+          required: ["namespace", "query"],
+        },
+        parameters: {
+          type: "object",
+          properties: {
+            namespace: {
+              type: "string",
+              description: "The client website namespace to query.",
+              enum: allowedNamespaceNames.length > 0 ? allowedNamespaceNames : undefined,
+            },
+            query: {
+              type: "string",
+              description:
+                "Natural language question or search topic. In GET requests, encode spaces with '+' (e.g. 'condusef+sipres').",
+            },
+            topK: {
+              type: "integer",
+              description: "Number of context fragments to inspect (default 10, max 20).",
+              default: 10,
+            },
+          },
+          required: ["namespace", "query"],
+        },
+      },
+      {
+        name: "scrapio_get_entities",
+        description:
+          "Extracts SEO entities, brands, products, organizations, and Schema.org structured data types from a client's crawled website.",
+        method: "GET or POST",
+        endpoint: `${baseUrl}/api/v1/entities`,
+        urlTemplate: `${baseUrl}/api/v1/entities?key=${userApiKey}&namespace={namespace}`,
+        exampleUrl: `${baseUrl}/api/v1/entities?key=${userApiKey}&namespace=${encodeURIComponent(allowedNamespaceNames[0] || "Avafin")}`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            namespace: {
+              type: "string",
+              description: "The client website namespace to analyze.",
+              enum: allowedNamespaceNames.length > 0 ? allowedNamespaceNames : undefined,
+            },
+          },
+          required: ["namespace"],
+        },
+        parameters: {
+          type: "object",
+          properties: {
+            namespace: {
+              type: "string",
+              description: "The client website namespace to analyze.",
+              enum: allowedNamespaceNames.length > 0 ? allowedNamespaceNames : undefined,
+            },
+          },
+          required: ["namespace"],
+        },
+      },
+    ];
 
     return NextResponse.json(
       {
         status: "success",
+        protocol: "mcp-declarative-v1",
+        description: "Scrapio Universal MCP & Headless Knowledge Graph API",
         totalVectors,
         dimension: stats.dimension || 768,
-        queryEndpoint: `${baseUrl}/api/v1/query`,
-        api: {
-          queryEndpoint: `${baseUrl}/api/v1/query`,
-          method: "GET",
-          example: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(namespacesList[0]?.name || "Avafin")}&query=condusef+sipres`,
-          parameters: {
-            key: "string (Scrapio API Key)",
-            namespace: "string (Nombre del cliente/sitio web)",
-            query: "string (Pregunta o tema con espacios codificados con '+' o '%20')",
-            topK: "number (Opcional, 1 a 20 fragmentos, default 10)",
-          },
+        tools,
+        mcp: {
+          serverName: "scrapio-mcp-server",
+          version: "1.0.0",
+          sseEndpoint: `${baseUrl}/api/v1/mcp?key=${userApiKey}`,
+          tools,
         },
         namespaces: namespacesList.map((ns) => ({
           ...ns,
           queryUrl: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(ns.name)}`,
+          exampleQueryUrl: `${baseUrl}/api/v1/query?key=${userApiKey}&namespace=${encodeURIComponent(ns.name)}&query=regulaciones+condusef+sipres`,
         })),
       },
       {
@@ -101,9 +187,7 @@ export async function GET(req: NextRequest) {
       { error: error.message || "Error al obtener la lista de namespaces de Pinecone." },
       {
         status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: { "Access-Control-Allow-Origin": "*" },
       }
     );
   }

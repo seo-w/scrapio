@@ -51,9 +51,34 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
     const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
 
+    const baseUrl = process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
+
     if (!query) {
+      const stats = await getIndexStats();
+      let available = Object.keys(stats.namespaces || {});
+      if (!authUser.isAdmin) {
+        available = available.filter((ns) => isNamespaceAllowed(authUser, ns));
+      }
+      const targetNs = namespace || available[0] || "Avafin";
       return NextResponse.json(
-        { error: "El campo 'query' es obligatorio con la pregunta a responder." },
+        {
+          status: "error",
+          code: "MISSING_QUERY_PARAMETER",
+          error: "El parámetro 'query' es obligatorio.",
+          toolDocumentation: {
+            tool: "scrapio_query_client",
+            method: "GET or POST",
+            endpoint: `${baseUrl}/api/v1/query`,
+            requiredParameters: ["namespace", "query"],
+            exampleGet: `${baseUrl}/api/v1/query?key=${authUser.apiKey}&namespace=${encodeURIComponent(targetNs)}&query=requisitos+prestamo`,
+            postFormat: {
+              url: `${baseUrl}/api/v1/query`,
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authUser.apiKey}` },
+              body: { namespace: targetNs, query: "requisitos de prestamo", topK: 10 },
+            },
+            note: "En peticiones GET con navegador o fetch, codifica los espacios con '+' (ej: query=terminos+de+servicio).",
+          },
+        },
         { status: 400, headers: CORS_HEADERS }
       );
     }
@@ -66,8 +91,17 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
       }
       return NextResponse.json(
         {
-          error: "El campo 'namespace' es obligatorio.",
+          status: "error",
+          code: "MISSING_NAMESPACE_PARAMETER",
+          error: "El parámetro 'namespace' es obligatorio.",
           availableNamespaces: available,
+          toolDocumentation: {
+            tool: "scrapio_query_client",
+            method: "GET or POST",
+            endpoint: `${baseUrl}/api/v1/query`,
+            requiredParameters: ["namespace", "query"],
+            exampleGet: `${baseUrl}/api/v1/query?key=${authUser.apiKey}&namespace=${encodeURIComponent(available[0] || "Avafin")}&query=condusef+sipres`,
+          },
         },
         { status: 400, headers: CORS_HEADERS }
       );

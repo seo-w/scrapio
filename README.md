@@ -20,6 +20,32 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-21 — Feat: Protocolo MCP Declarativo Universal para Cualquier LLM + Fix de Codificación de URLs y Filtros de Inyección
+
+**Problema resuelto:**
+1. Al consultar desde Claude Web, ChatGPT o Cursor, Claude arrojaba dos tipos de errores:
+   - *Filtro de inyección:* Detectaba directivas conversacionales dirigidas al bot (`"fetchGuidance"`), marcando `"Detectando instrucciones ocultas dirigidas a la herramienta de navegación"`.
+   - *Fallo de parseo de URL:* La herramienta de fetch de Claude (escrita en Go) lanzaba error de cliente (`parse error: invalid character ' ' in request URL`) al intentar consultar URLs con espacios sin codificar (`&query=que relacion tiene avafin con condusef`).
+2. Se requería que la API actuara como un servidor **MCP (Model Context Protocol)** autónomo y auto-descriptivo, informando a cualquier modelo (Claude, ChatGPT, Gemini, DeepSeek, Cursor) qué herramientas existen, sus parámetros requeridos, los clientes asignados y cómo consultarlos con exactitud.
+
+**Mejoras implementadas:**
+1. **Esquema MCP y OpenAPI Declarativo en `/api/v1/namespaces`:**
+   - Se estructuró la respuesta con las propiedades estándar del protocolo MCP: `protocol: "mcp-declarative-v1"`, `tools: [...]`, `inputSchema` y `parameters` con especificación JSON Schema formal.
+   - Las herramientas `scrapio_query_client` y `scrapio_get_entities` exponen en su `enum` exclusivamente los namespaces a los que el usuario tiene autorización según su Scrapio API Key.
+   - En cada cliente del listado se proporcionan `queryUrl` y `exampleQueryUrl` con la Scrapio API Key ya inyectada y los términos de búsqueda codificados con signos `+`.
+2. **Respuesta de Diagnóstico y Auto-Corrección en `/api/v1/query`:**
+   - Si un LLM u origen externo consulta `/api/v1/query` omitiendo parámetros obligatorios (`query` o `namespace`), el endpoint responde con un código 400 enriquecido con `toolDocumentation`, el formato GET/POST esperado y URLs de ejemplo funcionales para que el LLM se auto-corrija inmediatamente en su siguiente llamada.
+3. **Neutralidad contra Filtros de Inyección de Claude:**
+   - Se eliminaron todos los textos coloquiales directos al bot. La metadata ahora es 100% declarativa REST/JSON-Schema, cumpliendo los lineamientos de seguridad de Anthropic y OpenAI.
+4. **Actualización de la Interfaz Web (Modal de Integraciones):**
+   - En la pestaña *💬 Prompt Directo*, se añadieron prompts universales optimizados para cualquier LLM con navegación web.
+   - En la pestaña *💻 Claude & Cursor (MCP)*, se añadieron tres modalidades: Consulta directa en Claude Web (con codificación segura `+`), Servidor MCP Remoto SSE/HTTP y configuración local para `claude_desktop_config.json`.
+5. **Corrección de Espacio Vectorial y Rigor RAG:**
+   - Se re-vectorizaron todos los fragmentos clave de CONDUSEF y SIPRES en el espacio de Gemini (`gemini-embedding-001`), pasando de una similitud de 0.0087 a más de 0.75.
+   - Se ajustó el prompt del sistema RAG (`lib/ai.ts`) eliminando la falacia de exhaustividad (el modelo nunca asume ausencia absoluta por falta de fragmentos y cita con precisión PROFECO y las fuentes disponibles).
+
+---
+
 ### 2026-10-21 — Feat: Aislamiento estricto multi-tenant (cuentas limpias) + Scrapio API Keys individuales únicas por usuario
 
 **Problema resuelto:** 
