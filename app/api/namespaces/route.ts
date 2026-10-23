@@ -32,10 +32,10 @@ export async function GET(req: Request) {
     const stats = await getIndexStats();
     
     // Transformar los namespaces de Pinecone en un formato limpio para el frontend
-    let namespacesList = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
+    let namespacesList = Object.entries(stats.namespaces || {}).map(([name, data]: [string, any]) => ({
       name,
       slug: name.toLowerCase().replace(/\s+/g, "-"),
-      vectorCount: data.recordCount || 0,
+      vectorCount: data?.recordCount || 0,
     }));
 
     // Si el usuario no es admin, ve ÚNICAMENTE los namespaces que le pertenecen o han sido asignados
