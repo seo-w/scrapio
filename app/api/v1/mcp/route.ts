@@ -152,10 +152,10 @@ export async function POST(req: NextRequest) {
 
       if (toolName === "list_scraped_sites") {
         const stats = await getIndexStats();
-        let list = Object.entries(stats.namespaces || {}).map(([name, data]) => ({
+        let list = Object.entries(stats.namespaces || {}).map(([name, data]: [string, any]) => ({
           name,
           slug: name.toLowerCase().replace(/\s+/g, "-"),
-          vectorCount: data.recordCount || 0,
+          vectorCount: data?.recordCount || 0,
         }));
 
         if (!authUser.isAdmin) {
