@@ -1996,6 +1996,8 @@ export default function Home() {
             {(() => {
               const activeApiKey = scrapioApiKey || currentUserInfo?.apiKey || "sk_scrapio_TU_CLAVE";
               const activeNamespacePrompt = namespace || "<tu_cliente_o_namespace>";
+              const encodedNamespacePrompt = encodeURIComponent(namespace || "Tivit");
+              const clientDisplayName = getClientDisplayName(namespace || "tu cliente");
 
               return (
                 <>
@@ -2085,19 +2087,57 @@ export default function Home() {
                           <p className="text-sm text-slate-700 leading-relaxed">
                             Copia cualquiera de estos prompts y pégalo directamente en <strong>ChatGPT Plus/Team</strong>,{" "}
                             <strong>Claude (Web / Pro)</strong>, <strong>Gemini Advanced</strong>,{" "}
-                            <strong>Cursor</strong>, <strong>Perplexity</strong> o <strong>Copilot</strong>. El modelo descubrirá
-                            tus clientes autorizados y sus herramientas MCP automáticamente.
+                            <strong>Cursor</strong>, <strong>Perplexity</strong> o <strong>Copilot</strong>.
                           </p>
                         </div>
 
-                        {/* Opción 1 */}
+                        {/* Opción 1: Consulta Directa al Cliente Activo */}
+                        <div className="bg-gradient-to-r from-emerald-50/70 via-emerald-50/30 to-white border border-emerald-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 text-sm">
+                                  Opción 1: Consulta Directa sobre {clientDisplayName} (1 Clic)
+                                </span>
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                                  Recomendado
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500">Pega esto en Claude, ChatGPT o Perplexity para obtener un reporte completo de {clientDisplayName} en 1 solo paso sin tener que armar URLs.</p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON en tiempo real.\n1. Analiza minuciosamente el conocimiento indexado de ${clientDisplayName}.\n2. Presenta un informe estructurado y clasificado con todos sus servicios, productos, soluciones y propuestas de valor.\n3. Cita textualmente las URLs de las fuentes originales devueltas en el campo "sources".`
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
+                            >
+                              {copiedSnippet ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>Copiar Prompt Directo</span>
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto select-all border border-slate-800">
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON en tiempo real.
+1. Analiza minuciosamente el conocimiento indexado de ${clientDisplayName}.
+2. Presenta un informe estructurado y clasificado con todos sus servicios, productos, soluciones y propuestas de valor.
+3. Cita textualmente las URLs de las fuentes originales devueltas en el campo "sources".`}
+                          </div>
+                          <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>URL 100% armada y codificada con la clave de tu cuenta y el cliente activo {clientDisplayName}.</span>
+                          </p>
+                        </div>
+
+                        {/* Opción 2: Discovery */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                               <span className="font-bold text-slate-900 text-sm">
-                                Opción 1: Discovery & Listado de Herramientas MCP
+                                Opción 2: Discovery & Listado de Todos los Clientes (MCP)
                               </span>
-                              <p className="text-xs text-slate-500">Pídele al modelo que descubra los clientes y herramientas autorizadas en tu cuenta.</p>
+                              <p className="text-xs text-slate-500">Pídele al modelo que descubra todos los clientes y herramientas autorizadas en tu cuenta.</p>
                             </div>
                             <button
                               onClick={() =>
@@ -2108,7 +2148,7 @@ export default function Home() {
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
                             >
                               {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                              <span>Copiar Prompt</span>
+                              <span>Copiar Prompt Discovery</span>
                             </button>
                           </div>
 
@@ -2123,19 +2163,19 @@ export default function Home() {
                           </p>
                         </div>
 
-                        {/* Opción 2 */}
+                        {/* Opción 3: Asistente Autónomo */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                               <span className="font-bold text-slate-900 text-sm">
-                                Opción 2: Prompt Completo de Asistente RAG Autónomo
+                                Opción 3: Prompt Completo de Asistente RAG Autónomo
                               </span>
                               <p className="text-xs text-slate-500">Configura a cualquier IA como un analista experto con RAG semántico y citas web.</p>
                             </div>
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).\n3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`
+                                  `Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).\n3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2148,7 +2188,7 @@ export default function Home() {
                           <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-line select-all border border-slate-800">
                             {`Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.
 1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).
 3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
@@ -2188,40 +2228,74 @@ export default function Home() {
                     {activeDocTab === "claude" && (
                       <div className="space-y-4">
                         {/* Opción 1: Consulta Directa en Claude Web */}
-                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                        <div className="bg-gradient-to-r from-emerald-50/70 via-emerald-50/30 to-white border border-emerald-200 rounded-2xl p-5 shadow-2xs space-y-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                              <h4 className="text-sm font-bold text-slate-900">Opción 1: Claude Web Directo (Sin Instalación)</h4>
-                              <p className="text-xs text-slate-500">Pega este prompt en claude.ai con navegación web. Claude interpretará el esquema MCP automáticamente.</p>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-900">Opción 1: Consulta Directa en Claude Web (1 Clic, Recomendado)</h4>
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                                  100% Compatible
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500">Pega esto en claude.ai. Al incluir la URL completa ya formada, Claude la abre al instante sin errores de sandbox ni URLs dinámicas.</p>
                             </div>
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.\nCuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.\nResponde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON devuelto.\nPreséntame un informe clasificado y detallado con los servicios, productos y soluciones de ${clientDisplayName}, citando las fuentes originales provistas en "sources".`
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                            >
+                              {copiedSnippet ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>Copiar Prompt Directo Claude</span>
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON devuelto.
+Preséntame un informe clasificado y detallado con los servicios, productos y soluciones de ${clientDisplayName}, citando las fuentes originales provistas en "sources".`}
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            La URL ya incluye los parámetros exactos (<code>&namespace={encodedNamespacePrompt}</code>) para evitar que Claude Web intente armar URLs en su sandbox.
+                          </p>
+                        </div>
+
+                        {/* Opción 2: Asistente Multi-Cliente en Claude */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-900">Opción 2: Asistente Autónomo Multi-Cliente (Claude Web)</h4>
+                              <p className="text-xs text-slate-500">Pega este prompt en claude.ai si deseas que primero descubra todos los clientes de tu cuenta.</p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.\nCuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.\nResponde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
                             >
                               {copiedSnippet ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                              <span>Copiar Prompt Claude</span>
+                              <span>Copiar Prompt Multi-Cliente</span>
                             </button>
                           </div>
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
                             {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.
-Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${activeNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.
+Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.
 Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`}
                           </div>
                           <p className="text-xs text-slate-500">
-                            Previene errores de URL en la herramienta interna de Claude gracias a la codificación con signos <code>+</code>.
+                            Si Claude te pide la URL de una pregunta específica, solo cambia <code>&query=tus+palabras</code>.
                           </p>
                         </div>
 
-                        {/* Opción 2: Conexión Remota HTTP/SSE */}
+                        {/* Opción 3: Conexión Remota HTTP/SSE */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                              <h4 className="text-sm font-bold text-slate-900">Opción 2: Servidor MCP Remoto por URL (Cursor & Claude Web)</h4>
+                              <h4 className="text-sm font-bold text-slate-900">Opción 3: Servidor MCP Remoto por URL (Cursor & Claude Web)</h4>
                               <p className="text-xs text-slate-500">Conéctate directamente sin necesidad de instalar NodeJS ni scripts locales.</p>
                             </div>
                             <button
@@ -2243,11 +2317,11 @@ Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.
                           </p>
                         </div>
 
-                        {/* Opción 3: claude_desktop_config.json */}
+                        {/* Opción 4: claude_desktop_config.json */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
-                              <h4 className="text-sm font-bold text-slate-900">Opción 3: Configuración para Claude Desktop (`claude_desktop_config.json`)</h4>
+                              <h4 className="text-sm font-bold text-slate-900">Opción 4: Configuración para Claude Desktop (`claude_desktop_config.json`)</h4>
                               <p className="text-xs text-slate-500">Para clientes que ejecutan MCP local vía stdin/stdout.</p>
                             </div>
                             <button
