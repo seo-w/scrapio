@@ -20,6 +20,37 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-23 — Feat: Cadena de Fallback Multi-Modelo (Gemini / OpenAI), Sincronización BYOK en Clerk y Generador Adaptativo de Prompts LLM
+
+**Problema resuelto:**
+1. **Error de cuota / facturación en Google Cloud:** Al consultar sitios grandes o múltiples peticiones (ej. namespace Tivit), Google Cloud Free Tier en `gemini-2.5-flash-lite` arrojaba un error 429 (`Resource Exhausted / Please check your plan and billing details`) debido a que ese modelo específico tiene una cuota diaria restrictiva de 20 peticiones/día en el plan gratuito.
+2. **Falta de fallback a OpenAI cuando el usuario tiene clave BYOK:** Cuando un usuario configuraba su clave de OpenAI en el panel de Scrapio, esta solo se guardaba en el `localStorage` del navegador. Si consultaba desde fuera (Claude Web, ChatGPT, Cursor o cURL usando su Scrapio API Key `sk_scrapio_...`), el servidor no tenía acceso a su clave de OpenAI y la llamada fallaba si Gemini no respondía.
+3. **Límites del sandbox de Claude Web (`web_fetch`):** Claude Web no puede construir URLs dinámicas con parámetros nuevos en tiempo de ejecución. Si el prompt le pedía descubrir clientes y luego armar la URL de consulta, Claude arrojaba error de cliente (`client error` / timeout).
+4. **Desconexión entre cliente activo y prompts de integración:** Los snippets del modal de integración no permitían alternar el cliente activo ni ajustar la pregunta o tema en tiempo real, requiriendo que el usuario editara manualmente la URL.
+
+**Mejoras implementadas:**
+1. **Cadena de Fallback Multi-Modelo de Alta Disponibilidad (`lib/ai.ts`):**
+   * Se reordenó la jerarquía de modelos de Google Gemini:
+     1. Primario: **`gemini-flash-latest`** (~1.2s de latencia, cuota estándar de 1,500 solicitudes/día).
+     2. Secundario: **`gemini-3.5-flash`**.
+     3. Terciario: **`gemini-2.5-flash-lite`**.
+   * Se eliminaron filtros restrictivos de códigos de error: cualquier fallo de modelo en el bucle avanza limpiamente al siguiente modelo candidato.
+   * **Fallback multi-proveedor automático a OpenAI:** Si todos los modelos de Gemini fallan o presentan restricciones de facturación/cuota, la API cambia de forma transparente a OpenAI:
+     * Embeddings: **`text-embedding-3-small`** configurado a **768 dimensiones**, coincidiendo exactamente con la dimensión del índice Pinecone.
+     * Generación RAG: **`gpt-4o-mini`**.
+2. **Sincronización de BYOK en la Nube con Clerk (`lib/auth.ts` y `/api/me`):**
+   * El endpoint `POST /api/me` ahora soporta la acción `{ action: "save_keys", openaiApiKey, geminiApiKey }`, guardando las claves en los metadatos públicos del usuario en Clerk (`clerkUser.publicMetadata.openai_api_key`).
+   * La función `validateScrapioApiKey` asocia automáticamente la Scrapio API Key (`sk_scrapio_user_<id>_<hash>`) con las claves BYOK del usuario.
+   * Cuando Claude, ChatGPT o cualquier herramienta externa consulta `/api/v1/query` o `/api/v1/mcp` usando la Scrapio API Key, el backend detecta su clave de OpenAI guardada y la utiliza como salvaguarda ante caídas de Gemini.
+3. **Generador Interactivo y Adaptativo de Prompts en la Interfaz Web (`app/page.tsx`):**
+   * **Selector de Cliente en Vivo:** Menú desplegable dentro del modal que permite alternar entre todos los namespaces del usuario con sus nombres reales y conteo exacto de vectores.
+   * **Selector de Tema / Pregunta en Tiempo Real:** Entrada editable y botones rápidos para *Servicios y Productos*, *Quiénes Somos & Misión*, *Contacto y Soporte*, *Regulaciones y Políticas*, y *Entidades SEO*.
+   * **Prompts 100% prearmados para Claude Web (Opción 1):** Incluye la URL completa ya codificada (`&query=servicios+productos+y+soluciones`), permitiendo que Claude la abra con 1 solo clic sin restricciones de sandbox.
+   * **Soporte para ChatGPT Plus (Web Browsing):** Se agregó prompt directo para ChatGPT Plus además de las acciones para Custom GPTs.
+   * **Sincronización bidireccional:** Al iniciar sesión o cargar la página, las claves BYOK guardadas en Clerk se sincronizan automáticamente con el navegador.
+
+---
+
 ### 2026-10-21 — Feat: Protocolo MCP Declarativo Universal para Cualquier LLM + Fix de Codificación de URLs y Filtros de Inyección
 
 **Problema resuelto:**
@@ -257,10 +288,11 @@ Scrapio implementa autenticación moderna y control de acceso basado en roles me
 * **Modelo por defecto**: Dispone de **Gemini 3.8 Flash** activo de forma predeterminada sin costo adicional.
 * **Protección de saldo**: El modelo OpenAI GPT-4o Mini permanece bloqueado con candado `🔒` salvo que el administrador lo autorice o el usuario use su propia API Key (BYOK).
 
-### 3. Soporte BYOK (Bring Your Own Key)
+### 3. Soporte BYOK (Bring Your Own Key) y Sincronización en la Nube
 * En la barra lateral y en el compositor, cualquier usuario puede pulsar **"Mis API Keys (BYOK)"**.
-* Permite guardar claves personales de Gemini o OpenAI en el almacenamiento local de su navegador.
+* Permite guardar claves personales de Gemini o OpenAI tanto en el almacenamiento local del navegador como sincronizarlas permanentemente en sus metadatos de Clerk.
 * Al ingresar una clave personal de OpenAI, el modelo **GPT-4o Mini se desbloquea inmediatamente**, facturando las consultas a la cuenta del propio usuario.
+* **Salvaguarda y Fallback Automático en APIs Externas:** La clave BYOK de OpenAI queda asociada a la `Scrapio API Key` (`sk_scrapio_...`) del usuario. Si Claude, ChatGPT, Cursor o un flujo automatizado consulta la API y Gemini agota cuota o tiene problemas de facturación, el backend activa automáticamente la clave de OpenAI del usuario como fallback transparente.
 
 ---
 
@@ -302,8 +334,11 @@ npm run mcp
 * **`PATCH`**: Actualiza los proyectos permitidos (`allowed_namespaces`) y el permiso de OpenAI (`can_use_openai`) de un usuario.
 * **`DELETE ?userId=...`**: Elimina a un usuario de Clerk.
 
-### 3. Perfil de Usuario (`GET /api/me`)
-* Devuelve el rol del usuario actual, su correo, nombre y lista de proyectos autorizados.
+### 3. Perfil de Usuario y Gestión de Claves (`GET / POST /api/me`)
+* **`GET`**: Devuelve el rol del usuario actual, su correo, nombre, lista de proyectos autorizados, su Scrapio API Key única y sus claves BYOK configuradas.
+* **`POST`**:
+  * Si se llama sin cuerpo: Regenera una nueva `Scrapio API Key` única (`sk_scrapio_<userId>_<randomHash>`), invalidando la anterior.
+  * Si se llama con `{ action: "save_keys", openaiApiKey, geminiApiKey }`: Guarda y sincroniza las claves BYOK directamente en los metadatos de Clerk del usuario para que queden asociadas a su API Key.
 
 ### 4. Auditoría y Eliminación de URLs (`GET / DELETE /api/urls`)
 * **`GET ?namespace=...`**: Compara en tiempo real las URLs vectorizadas en Pinecone contra las URLs descubiertas en el sitemap XML.
@@ -314,10 +349,13 @@ npm run mcp
   * Cabecera HTTP: `Authorization: Bearer <SCRAPIO_API_KEY>`
   * Cabecera HTTP: `X-API-Key: <SCRAPIO_API_KEY>`
   * O parámetro de consulta (Query param): `?key=<SCRAPIO_API_KEY>` (o `?apiKey=...`)
+* **Resiliencia y Fallback Multi-Modelo Automático:**
+  * Si las solicitudes a Gemini experimentan errores de cuota o facturación (HTTP 429 / billing details), la API ejecuta una cascada de modelos (`gemini-flash-latest` $\rightarrow$ `gemini-3.5-flash` $\rightarrow$ `gemini-2.5-flash-lite`).
+  * Si todos los modelos de Gemini fallan, se activa automáticamente el fallback a OpenAI (`text-embedding-3-small` en 768d y `gpt-4o-mini`) utilizando la clave BYOK asociada al usuario o la del entorno.
 * **Endpoints:**
-  * **`GET /api/v1/namespaces`**: Devuelve el listado de todos los sitios/clientes indexados y su cantidad de vectores en Pinecone.
-  * **`POST /api/v1/query`**: Consulta RAG semántica serverless con citas de fuentes y CTAs.
-  * **`POST /api/v1/entities`**: Extracción completa de entidades SEO (marcas, directivos, servicios, ubicaciones y Schema.org sugerido).
+  * **`GET /api/v1/namespaces`**: Devuelve el listado de todos los sitios/clientes indexados y su cantidad de vectores en Pinecone, junto con el esquema de herramientas MCP declarativo.
+  * **`GET / POST /api/v1/query`**: Consulta RAG semántica serverless con citas de fuentes y CTAs. Soporta parámetro `&query=palabras+clave` en GET o JSON en POST.
+  * **`GET / POST /api/v1/entities`**: Extracción completa de entidades SEO (marcas, directivos, servicios, ubicaciones y Schema.org sugerido).
   * **`POST / GET /api/v1/mcp`**: Endpoint oficial de servidor **Model Context Protocol (MCP)** compatible con transporte JSON-RPC y SSE.
 
 ### 6. Disparo de Ingesta a GitHub Actions (`POST /api/ingest`)
