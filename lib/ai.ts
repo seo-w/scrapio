@@ -24,7 +24,7 @@ export interface ContextChunk {
 }
 
 /**
- * Genera un vector embedding de 768 dimensiones soportando alternancia dinámica entre Gemini y OpenAI
+ * Genera un vector embedding de 768 dimensiones soportando alternancia dinámica y fallback entre Gemini y OpenAI
  */
 export async function generateEmbedding(
   text: string,
@@ -34,21 +34,33 @@ export async function generateEmbedding(
 ): Promise<number[]> {
   const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
 
+  // Función auxiliar para generar embedding con OpenAI (768 dimensiones)
+  const tryOpenAIEmbedding = async (): Promise<number[] | null> => {
+    try {
+      const openai = getOpenAIClient(customApiKey);
+      const res = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: text,
+        dimensions: 768,
+      });
+      return res.data[0].embedding;
+    } catch (err: any) {
+      console.warn("⚠️ Error en OpenAI embedding:", err.message);
+      return null;
+    }
+  };
+
   if (provider === "openai") {
-    const openai = getOpenAIClient(customApiKey);
-    const res = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-      dimensions: 768,
-    });
-    return res.data[0].embedding;
+    const vector = await tryOpenAIEmbedding();
+    if (vector) return vector;
+    console.warn("⚠️ Fallback de embedding OpenAI a Google Gemini...");
   }
 
   // Proveedor por defecto: Google Gemini
   const genAI = getGenAIClient(customApiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
 
-
+  let geminiError: any = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const result = await model.embedContent({
@@ -58,15 +70,20 @@ export async function generateEmbedding(
       });
       return result.embedding.values;
     } catch (err: any) {
-      const isQuotaError =
+      geminiError = err;
+      const isQuotaOrBillingError =
         err.status === 429 ||
+        err.status === 402 ||
+        err.status === 403 ||
         err.message?.includes("429") ||
         err.message?.includes("RESOURCE_EXHAUSTED") ||
         err.message?.includes("quota") ||
-        err.message?.includes("Quota");
+        err.message?.includes("Quota") ||
+        err.message?.includes("billing") ||
+        err.message?.includes("Billing");
 
-      if (attempt === retries || isQuotaError) {
-        throw err;
+      if (attempt === retries || isQuotaOrBillingError) {
+        break; // Romper el bucle para intentar fallback con OpenAI
       }
 
       const backoffMs = Math.pow(2, attempt) * 1500;
@@ -75,7 +92,15 @@ export async function generateEmbedding(
     }
   }
 
-  throw new Error("Error al generar embedding tras reintentos.");
+  // Si Gemini falló por cuota/billing, intentar fallback a OpenAI si hay clave disponible
+  const hasOpenAI = Boolean(customApiKey || process.env.OPENAI_API_KEY);
+  if (hasOpenAI) {
+    console.warn("⚠️ Gemini embedding falló o agotó cuota. Intentando fallback a OpenAI (text-embedding-3-small)...");
+    const fallbackVector = await tryOpenAIEmbedding();
+    if (fallbackVector) return fallbackVector;
+  }
+
+  throw geminiError || new Error("Error al generar embedding tras reintentos y fallbacks.");
 }
 
 /**
@@ -158,28 +183,39 @@ Capacidades y Modo de Respuesta:
 CONTEXTO RECUPERADO:
 ${formattedContext}`;
 
-  if (provider === "openai") {
-    const openai = getOpenAIClient(customApiKey);
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query },
-      ],
-    });
+  // Función auxiliar para generar respuesta RAG con OpenAI (gpt-4o-mini)
+  const tryOpenAIChat = async (): Promise<{ text: string; sources: string[] } | null> => {
+    try {
+      const openai = getOpenAIClient(customApiKey);
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: query },
+        ],
+      });
+      return {
+        text: completion.choices[0]?.message?.content || "Sin respuesta.",
+        sources,
+      };
+    } catch (openAiErr: any) {
+      console.warn("⚠️ Error en OpenAI chat completion:", openAiErr.message);
+      return null;
+    }
+  };
 
-    return {
-      text: completion.choices[0]?.message?.content || "Sin respuesta.",
-      sources,
-    };
+  if (provider === "openai") {
+    const res = await tryOpenAIChat();
+    if (res) return res;
+    console.warn("⚠️ OpenAI no disponible o agotó cuota. Intentando fallback con Google Gemini...");
   }
 
-  // Proveedor por defecto: Gemini
+  // Proveedor por defecto: Gemini (con lista ordenada de modelos de alta disponibilidad)
   const genAI = getGenAIClient(customApiKey);
-  const preferredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
   const candidateModels = Array.from(
-    new Set([preferredModel, "gemini-2.5-flash-lite", "gemini-3.5-flash"])
+    new Set([preferredModel, "gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash-lite"])
   );
 
   let lastError: any = null;
@@ -201,21 +237,22 @@ ${formattedContext}`;
       };
     } catch (err: any) {
       lastError = err;
-      const isHighDemandOrUnavailable =
-        err.status === 503 ||
-        err.status === 429 ||
-        err.message?.includes("503") ||
-        err.message?.includes("429") ||
-        err.message?.includes("demand") ||
-        err.message?.includes("RESOURCE_EXHAUSTED");
-
-      if (isHighDemandOrUnavailable && modelName !== candidateModels[candidateModels.length - 1]) {
-        console.warn(`⚠️ Modelo ${modelName} no disponible (${err.status || err.message}). Intentando fallback con siguiente modelo...`);
+      console.warn(`⚠️ Modelo Gemini '${modelName}' no respondió (${err.status || err.message}). Intentando siguiente fallback...`);
+      // Si no es el último modelo de la lista, continúa con el siguiente modelo candidato
+      if (modelName !== candidateModels[candidateModels.length - 1]) {
         continue;
       }
-      throw err;
     }
   }
 
-  throw lastError || new Error("Error al generar respuesta RAG con Gemini.");
+  // Si todos los modelos de Gemini fallaron (ej. cuota / billing details en Google Cloud),
+  // intentar fallback automático a OpenAI si hay una clave configurada en el entorno o BYOK
+  const hasOpenAI = Boolean(customApiKey || process.env.OPENAI_API_KEY);
+  if (hasOpenAI && provider !== "openai") {
+    console.warn("⚠️ Todos los modelos de Gemini fallaron o tienen restricciones de facturación. Ejecutando fallback a OpenAI (gpt-4o-mini)...");
+    const openAiFallback = await tryOpenAIChat();
+    if (openAiFallback) return openAiFallback;
+  }
+
+  throw lastError || new Error("Error al generar respuesta RAG con Gemini y OpenAI tras agotar fallbacks.");
 }
