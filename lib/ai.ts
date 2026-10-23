@@ -177,9 +177,9 @@ ${formattedContext}`;
 
   // Proveedor por defecto: Gemini
   const genAI = getGenAIClient(customApiKey);
-  const preferredModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
   const candidateModels = Array.from(
-    new Set([preferredModel, "gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash-lite"])
+    new Set([preferredModel, "gemini-2.5-flash-lite", "gemini-3.5-flash"])
   );
 
   let lastError: any = null;

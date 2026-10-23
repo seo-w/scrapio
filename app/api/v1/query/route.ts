@@ -135,11 +135,11 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
       );
     }
 
-    // 1. Resolver el nombre real del namespace de forma tolerante (insensible a mayúsculas/guiones)
-    const resolvedNs = await resolvePineconeNamespace(namespace);
-
-    // 2. Vectorizar la consulta
-    const queryVector = await generateEmbedding(query, aiProvider, 3, customApiKey);
+    // 1 & 2. Resolver namespace y generar vector embedding en paralelo
+    const [resolvedNs, queryVector] = await Promise.all([
+      resolvePineconeNamespace(namespace),
+      generateEmbedding(query, aiProvider, 3, customApiKey),
+    ]);
 
     // 3. Query Pinecone con ventana amplia de candidatos para re-ranking híbrido
     const candidatePoolSize = Math.max(topK * 4, 40);

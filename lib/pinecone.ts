@@ -43,6 +43,7 @@ export async function upsertToPinecone(namespace: string, items: UpsertItem[]) {
     await ns.upsert(batch);
   }
 
+  invalidateStatsCache();
   return { success: true, count: items.length };
 }
 
@@ -114,12 +115,24 @@ export async function queryPinecone(
   }));
 }
 
+// Cache en memoria para estadísticas de Pinecone (TTL de 60 segundos)
+let statsCache: { data: any; expiresAt: number } | null = null;
+
+export function invalidateStatsCache() {
+  statsCache = null;
+}
+
 /**
- * Obtiene las estadísticas e información de los namespaces en el índice
+ * Obtiene las estadísticas e información de los namespaces en el índice con caché de 60s
  */
-export async function getIndexStats() {
+export async function getIndexStats(forceFresh = false) {
+  const now = Date.now();
+  if (!forceFresh && statsCache && statsCache.expiresAt > now) {
+    return statsCache.data;
+  }
   const index = getPineconeIndex();
   const stats = await index.describeIndexStats();
+  statsCache = { data: stats, expiresAt: now + 60_000 };
   return stats;
 }
 
@@ -131,6 +144,7 @@ export async function deleteNamespace(namespace: string) {
   const index = getPineconeIndex();
   const ns = index.namespace(resolvedNs);
   await ns.deleteAll();
+  invalidateStatsCache();
   return { success: true };
 }
 

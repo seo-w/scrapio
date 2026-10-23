@@ -219,8 +219,10 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const resolvedNs = await resolvePineconeNamespace(rawNamespace);
-        const queryVector = await generateEmbedding(query);
+        const [resolvedNs, queryVector] = await Promise.all([
+          resolvePineconeNamespace(rawNamespace),
+          generateEmbedding(query),
+        ]);
         const matches = await queryPinecone(resolvedNs, queryVector, topK);
 
         if (matches.length === 0) {

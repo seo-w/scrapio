@@ -57,15 +57,16 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
       );
     }
 
-    const namespace = await resolvePineconeNamespace(rawNamespace);
-
-    // 1. Vectorizamos una consulta clave enfocada en la esencia de la empresa y su oferta
-    const queryVector = await generateEmbedding(
-      "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto",
-      aiProvider,
-      3,
-      customApiKey
-    );
+    // 1. Resolver namespace y generar vector embedding en paralelo
+    const [namespace, queryVector] = await Promise.all([
+      resolvePineconeNamespace(rawNamespace),
+      generateEmbedding(
+        "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto",
+        aiProvider,
+        3,
+        customApiKey
+      ),
+    ]);
 
     // 2. Recuperamos los top 12 chunks
     const matches = await queryPinecone(namespace, queryVector, 12);
