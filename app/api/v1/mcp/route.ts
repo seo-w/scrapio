@@ -259,7 +259,7 @@ export async function POST(req: NextRequest) {
 
         const [resolvedNs, queryVector] = await Promise.all([
           resolvePineconeNamespace(rawNamespace),
-          generateEmbedding(query),
+          generateEmbedding(query, undefined, 3, undefined, authUser.customOpenAiKey),
         ]);
         const matches = await queryPinecone(resolvedNs, queryVector, topK);
 
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
           text: match.metadata.text_chunk,
         }));
 
-        const { text, sources } = await generateRAGResponse(query, contextChunks);
+        const { text, sources } = await generateRAGResponse(query, contextChunks, undefined, undefined, authUser.customOpenAiKey);
 
         let fullText = text;
         if (sources && sources.length > 0) {
@@ -336,10 +336,16 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const resolvedNs = await resolvePineconeNamespace(rawNamespace);
-        const queryVector = await generateEmbedding(
-          "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto"
-        );
+        const [resolvedNs, queryVector] = await Promise.all([
+          resolvePineconeNamespace(rawNamespace),
+          generateEmbedding(
+            "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto",
+            undefined,
+            3,
+            undefined,
+            authUser.customOpenAiKey
+          ),
+        ]);
         const matches = await queryPinecone(resolvedNs, queryVector, 12);
 
         if (matches.length === 0) {
@@ -368,7 +374,7 @@ export async function POST(req: NextRequest) {
 4. LUGARES Y COBERTURA
 5. TABLA RESUMEN CON SCHEMA.ORG (Organization, Product, Service, LocalBusiness, etc.)`;
 
-        const { text, sources } = await generateRAGResponse(prompt, contextChunks);
+        const { text, sources } = await generateRAGResponse(prompt, contextChunks, undefined, undefined, authUser.customOpenAiKey);
         let fullText = text;
         if (sources && sources.length > 0) {
           fullText += "\n\n### Fuentes analizadas:\n" + sources.map((s, idx) => `${idx + 1}. [${s}](${s})`).join("\n");

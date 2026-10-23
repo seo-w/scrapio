@@ -30,14 +30,25 @@ export async function generateEmbedding(
   text: string,
   overrideProvider?: string,
   retries = 3,
-  customApiKey?: string
+  customApiKey?: string,
+  fallbackOpenAiKey?: string
 ): Promise<number[]> {
   const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
+
+  const openAiKey =
+    fallbackOpenAiKey ||
+    (customApiKey && (customApiKey.startsWith("sk-") || provider === "openai") ? customApiKey : undefined) ||
+    process.env.OPENAI_API_KEY;
+
+  const geminiKey =
+    (customApiKey && !customApiKey.startsWith("sk-") ? customApiKey : undefined) ||
+    process.env.GEMINI_API_KEY;
 
   // Función auxiliar para generar embedding con OpenAI (768 dimensiones)
   const tryOpenAIEmbedding = async (): Promise<number[] | null> => {
     try {
-      const openai = getOpenAIClient(customApiKey);
+      if (!openAiKey) return null;
+      const openai = getOpenAIClient(openAiKey);
       const res = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: text,
@@ -57,7 +68,7 @@ export async function generateEmbedding(
   }
 
   // Proveedor por defecto: Google Gemini
-  const genAI = getGenAIClient(customApiKey);
+  const genAI = getGenAIClient(geminiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
 
   let geminiError: any = null;
@@ -93,7 +104,7 @@ export async function generateEmbedding(
   }
 
   // Si Gemini falló por cuota/billing, intentar fallback a OpenAI si hay clave disponible
-  const hasOpenAI = Boolean(customApiKey || process.env.OPENAI_API_KEY);
+  const hasOpenAI = Boolean(openAiKey);
   if (hasOpenAI) {
     console.warn("⚠️ Gemini embedding falló o agotó cuota. Intentando fallback a OpenAI (text-embedding-3-small)...");
     const fallbackVector = await tryOpenAIEmbedding();
@@ -157,7 +168,8 @@ export async function generateRAGResponse(
   query: string,
   contextChunks: ContextChunk[],
   overrideProvider?: string,
-  customApiKey?: string
+  customApiKey?: string,
+  fallbackOpenAiKey?: string
 ): Promise<{ text: string; sources: string[] }> {
   const provider = (overrideProvider || process.env.AI_PROVIDER || "gemini").toLowerCase();
   const formattedContext = contextChunks
@@ -165,6 +177,15 @@ export async function generateRAGResponse(
     .join("\n\n---\n\n");
 
   const sources = Array.from(new Set(contextChunks.map((c) => c.url)));
+
+  const openAiKey =
+    fallbackOpenAiKey ||
+    (customApiKey && (customApiKey.startsWith("sk-") || provider === "openai") ? customApiKey : undefined) ||
+    process.env.OPENAI_API_KEY;
+
+  const geminiKey =
+    (customApiKey && !customApiKey.startsWith("sk-") ? customApiKey : undefined) ||
+    process.env.GEMINI_API_KEY;
 
   const systemPrompt = `Eres un asistente virtual experto y analista SEO de alta precisión.
 Tu objetivo es atender la solicitud del usuario utilizando la información de contexto proporcionada sobre el sitio web.
@@ -186,7 +207,8 @@ ${formattedContext}`;
   // Función auxiliar para generar respuesta RAG con OpenAI (gpt-4o-mini)
   const tryOpenAIChat = async (): Promise<{ text: string; sources: string[] } | null> => {
     try {
-      const openai = getOpenAIClient(customApiKey);
+      if (!openAiKey) return null;
+      const openai = getOpenAIClient(openAiKey);
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         temperature: 0.2,
@@ -212,7 +234,7 @@ ${formattedContext}`;
   }
 
   // Proveedor por defecto: Gemini (con lista ordenada de modelos de alta disponibilidad)
-  const genAI = getGenAIClient(customApiKey);
+  const genAI = getGenAIClient(geminiKey);
   const preferredModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
   const candidateModels = Array.from(
     new Set([preferredModel, "gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash-lite"])
@@ -246,8 +268,8 @@ ${formattedContext}`;
   }
 
   // Si todos los modelos de Gemini fallaron (ej. cuota / billing details en Google Cloud),
-  // intentar fallback automático a OpenAI si hay una clave configurada en el entorno o BYOK
-  const hasOpenAI = Boolean(customApiKey || process.env.OPENAI_API_KEY);
+  // intentar fallback automático a OpenAI si hay una clave configurada en el entorno, usuario o BYOK
+  const hasOpenAI = Boolean(openAiKey);
   if (hasOpenAI && provider !== "openai") {
     console.warn("⚠️ Todos los modelos de Gemini fallaron o tienen restricciones de facturación. Ejecutando fallback a OpenAI (gpt-4o-mini)...");
     const openAiFallback = await tryOpenAIChat();

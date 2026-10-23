@@ -57,6 +57,8 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
       );
     }
 
+    const userFallbackOpenAiKey = authUser.customOpenAiKey;
+
     // 1. Resolver namespace y generar vector embedding en paralelo
     const [namespace, queryVector] = await Promise.all([
       resolvePineconeNamespace(rawNamespace),
@@ -64,7 +66,8 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
         "empresa organización marcas productos servicios soluciones personas equipo ubicación contacto",
         aiProvider,
         3,
-        customApiKey
+        customApiKey,
+        userFallbackOpenAiKey
       ),
     ]);
 
@@ -102,7 +105,7 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
 
 Presenta la información de forma ejecutiva, limpia y precisa.`;
 
-    const { text, sources } = await generateRAGResponse(prompt, contextChunks, aiProvider, customApiKey);
+    const { text, sources } = await generateRAGResponse(prompt, contextChunks, aiProvider, customApiKey, userFallbackOpenAiKey);
 
     return NextResponse.json(
       {

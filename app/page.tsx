@@ -373,6 +373,8 @@ export default function Home() {
     canUseOpenAI: boolean;
     canUseGemini: boolean;
     apiKey?: string;
+    customOpenAiKey?: string;
+    customGeminiKey?: string;
   } | null>(null);
 
   // Estado BYOK (Bring Your Own Key)
@@ -389,6 +391,7 @@ export default function Home() {
 
   // Pestañas del Modal de Conexión LLM
   const [activeDocTab, setActiveDocTab] = useState<"direct" | "chatgpt" | "claude" | "python" | "n8n">("direct");
+  const [docQueryTopic, setDocQueryTopic] = useState("servicios productos y soluciones");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [scrapioApiKey, setScrapioApiKey] = useState<string>("");
@@ -480,6 +483,17 @@ export default function Home() {
         if (data.apiKey) {
           setScrapioApiKey(data.apiKey);
         }
+        if (typeof window !== "undefined") {
+          // Sincronizar llaves BYOK guardadas en Clerk si no existen en localStorage local
+          if (data.user?.customGeminiKey && !localStorage.getItem("scrapio_byok_gemini")) {
+            setCustomGeminiKey(data.user.customGeminiKey);
+            localStorage.setItem("scrapio_byok_gemini", data.user.customGeminiKey);
+          }
+          if (data.user?.customOpenAiKey && !localStorage.getItem("scrapio_byok_openai")) {
+            setCustomOpenaiKey(data.user.customOpenAiKey);
+            localStorage.setItem("scrapio_byok_openai", data.user.customOpenAiKey);
+          }
+        }
       }
     } catch (err) {
       console.error("Error cargando perfil del usuario:", err);
@@ -501,12 +515,31 @@ export default function Home() {
     }
   };
 
-  const handleSaveByok = (e: React.FormEvent) => {
+  const handleSaveByok = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanGemini = customGeminiKey.trim();
+    const cleanOpenai = customOpenaiKey.trim();
+
     if (typeof window !== "undefined") {
-      localStorage.setItem("scrapio_byok_gemini", customGeminiKey.trim());
-      localStorage.setItem("scrapio_byok_openai", customOpenaiKey.trim());
+      localStorage.setItem("scrapio_byok_gemini", cleanGemini);
+      localStorage.setItem("scrapio_byok_openai", cleanOpenai);
     }
+
+    try {
+      // Guardar permanentemente en Clerk para asociarlas a su Scrapio API Key
+      await fetch("/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_keys",
+          geminiApiKey: cleanGemini,
+          openaiApiKey: cleanOpenai,
+        }),
+      });
+    } catch (err) {
+      console.warn("No se pudo sincronizar BYOK en Clerk:", err);
+    }
+
     setByokSavedMessage(true);
     setTimeout(() => {
       setByokSavedMessage(false);
@@ -1992,16 +2025,18 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Tarjeta de Tu API Key */}
+            {/* Tarjeta de Tu API Key y Selector Dinámico */}
             {(() => {
               const activeApiKey = scrapioApiKey || currentUserInfo?.apiKey || "sk_scrapio_TU_CLAVE";
-              const activeNamespacePrompt = namespace || "<tu_cliente_o_namespace>";
-              const encodedNamespacePrompt = encodeURIComponent(namespace || "Tivit");
-              const clientDisplayName = getClientDisplayName(namespace || "tu cliente");
+              const activeNamespacePrompt = namespace || (availableNamespaces[0]?.name || "Tivit");
+              const encodedNamespacePrompt = encodeURIComponent(activeNamespacePrompt);
+              const clientDisplayName = getClientDisplayName(activeNamespacePrompt);
+              const cleanTopic = docQueryTopic.trim() || "servicios productos y soluciones";
+              const encodedQueryParam = encodeURIComponent(cleanTopic).replace(/%20/g, "+");
 
               return (
                 <>
-                  <div className="bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200 rounded-2xl p-4 mb-5 shadow-2xs">
+                  <div className="bg-gradient-to-r from-slate-50 to-slate-100/80 border border-slate-200 rounded-2xl p-4 mb-4 shadow-2xs">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -2053,11 +2088,83 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* Panel Interactivo: Selección de Cliente y Tema de Consulta */}
+                  <div className="bg-slate-50/90 border border-slate-200 rounded-2xl p-4 mb-4 shadow-2xs space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-600">Cliente Activo:</span>
+                        {availableNamespaces.length > 0 ? (
+                          <select
+                            value={namespace || availableNamespaces[0]?.name}
+                            onChange={(e) => setNamespace(e.target.value)}
+                            className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-bold text-slate-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          >
+                            {availableNamespaces.map((ns) => (
+                              <option key={ns.name} value={ns.name}>
+                                {getClientDisplayName(ns.name)} ({ns.vectorCount.toLocaleString()} vectores)
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="font-bold text-slate-900 text-xs sm:text-sm bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                            {clientDisplayName}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Prompts y URLs adaptados en tiempo real</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700">Tema o pregunta a consultar:</label>
+                        <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 truncate max-w-[200px] sm:max-w-xs">
+                          &query={encodedQueryParam}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={docQueryTopic}
+                        onChange={(e) => setDocQueryTopic(e.target.value)}
+                        placeholder="Ej: servicios productos y soluciones, regulaciones condusef..."
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+
+                      {/* Botones de sugerencias rápidas */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-[11px] font-semibold text-slate-400 mr-0.5">Sugerencias:</span>
+                        {[
+                          { label: "🛠️ Servicios y Productos", query: "servicios productos y soluciones" },
+                          { label: "🏢 Quiénes Somos & Misión", query: "quienes somos historia y propuesta de valor" },
+                          { label: "📞 Contacto y Soporte", query: "canales de atencion contacto y soporte" },
+                          { label: "⚖️ Regulaciones y Políticas", query: "regulaciones terminos de servicio y politicas" },
+                          { label: "🏷️ Marcas & Entidades SEO", query: "entidades marcas principales y productos" },
+                        ].map((sug) => (
+                          <button
+                            key={sug.label}
+                            type="button"
+                            onClick={() => setDocQueryTopic(sug.query)}
+                            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                              docQueryTopic === sug.query
+                                ? "bg-emerald-100 border-emerald-400 text-emerald-900 font-bold shadow-2xs"
+                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                            }`}
+                          >
+                            {sug.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Selector de Pestañas con estilo amplio tipo Segmented Control */}
-                  <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl mb-5 overflow-x-auto border border-slate-200/80">
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl mb-4 overflow-x-auto border border-slate-200/80">
                     {[
                       { id: "direct", label: "💬 Prompt Directo" },
-                      { id: "chatgpt", label: "🤖 Custom GPTs" },
+                      { id: "chatgpt", label: "🤖 Custom GPTs & ChatGPT" },
                       { id: "claude", label: "💻 Claude & Cursor (MCP)" },
                       { id: "python", label: "🐍 Python & cURL" },
                       { id: "n8n", label: "⚡ n8n / Make" },
@@ -2065,7 +2172,7 @@ export default function Home() {
                       <button
                         key={tab.id}
                         onClick={() => setActiveDocTab(tab.id as any)}
-                        className={`flex-1 min-w-fit px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap cursor-pointer text-center ${
+                        className={`flex-1 min-w-fit px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer text-center ${
                           activeDocTab === tab.id
                             ? "bg-white text-blue-600 shadow-sm border border-slate-200/60"
                             : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
@@ -2084,7 +2191,7 @@ export default function Home() {
                           <p className="font-bold text-blue-950 flex items-center gap-2 mb-1 text-sm">
                             <span>✨ Conexión Universal MCP & REST para Cualquier LLM</span>
                           </p>
-                          <p className="text-sm text-slate-700 leading-relaxed">
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
                             Copia cualquiera de estos prompts y pégalo directamente en <strong>ChatGPT Plus/Team</strong>,{" "}
                             <strong>Claude (Web / Pro)</strong>, <strong>Gemini Advanced</strong>,{" "}
                             <strong>Cursor</strong>, <strong>Perplexity</strong> o <strong>Copilot</strong>.
@@ -2108,7 +2215,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON en tiempo real.\n1. Analiza minuciosamente el conocimiento indexado de ${clientDisplayName}.\n2. Presenta un informe estructurado y clasificado con todos sus servicios, productos, soluciones y propuestas de valor.\n3. Cita textualmente las URLs de las fuentes originales devueltas en el campo "sources".`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON en tiempo real.\n1. Analiza minuciosamente el conocimiento indexado de ${clientDisplayName}.\n2. Presenta un informe estructurado y clasificado sobre: "${cleanTopic}".\n3. Cita textualmente las URLs de las fuentes originales devueltas en el campo "sources".`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2119,9 +2226,9 @@ export default function Home() {
                           </div>
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto select-all border border-slate-800">
-                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON en tiempo real.
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON en tiempo real.
 1. Analiza minuciosamente el conocimiento indexado de ${clientDisplayName}.
-2. Presenta un informe estructurado y clasificado con todos sus servicios, productos, soluciones y propuestas de valor.
+2. Presenta un informe estructurado y clasificado sobre: "${cleanTopic}".
 3. Cita textualmente las URLs de las fuentes originales devueltas en el campo "sources".`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
@@ -2175,7 +2282,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).\n3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`
+                                  `Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.\n1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.\n2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=<nombre_cliente>&query=<palabras_clave_con_+> reemplazando <nombre_cliente> por el nombre exacto del cliente (ej. ${activeNamespacePrompt}) y los espacios en la URL con '+'.\n3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
@@ -2188,7 +2295,7 @@ export default function Home() {
                           <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs sm:text-sm leading-relaxed overflow-x-auto whitespace-pre-line select-all border border-slate-800">
                             {`Actúa como mi analista SEO y asistente de investigación conectado a mi plataforma Scrapio.
 1. Consulta https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} para identificar los clientes web y herramientas MCP disponibles en mi cuenta.
-2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> (o haz un POST a ese mismo endpoint con el JSON {"query": "<pregunta>", "namespace": "${activeNamespacePrompt}"}). Reemplaza siempre los espacios en la URL con '+' (ej: query=requisitos+prestamo).
+2. Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=<nombre_cliente>&query=<palabras_clave_con_+> reemplazando <nombre_cliente> por el nombre exacto del cliente (ej. ${activeNamespacePrompt}) y los espacios en la URL con '+'.
 3. Responde basándote estrictamente en los fragmentos obtenidos, citando las fuentes originales y destacando llamadas a la acción (CTAs).`}
                           </div>
                           <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
@@ -2201,9 +2308,41 @@ export default function Home() {
 
                     {activeDocTab === "chatgpt" && (
                       <div className="space-y-4">
+                        {/* Opción 1: ChatGPT Plus Directo */}
+                        <div className="bg-gradient-to-r from-emerald-50/70 via-emerald-50/30 to-white border border-emerald-200 rounded-2xl p-5 shadow-2xs space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-900">Opción 1: Consulta Directa en ChatGPT Plus (Web Browsing)</h4>
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                                  1 Clic
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500">Pega esto en un nuevo chat de ChatGPT Plus/Team. Navegará a la URL y responderá basándose en el contenido de {clientDisplayName}.</p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON devuelto en tiempo real.\nPreséntame un informe exhaustivo, estructurado y clasificado sobre "${cleanTopic}" para ${clientDisplayName}, citando las fuentes provistas en "sources".`
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                            >
+                              {copiedSnippet ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>Copiar Prompt ChatGPT</span>
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON devuelto en tiempo real.
+Preséntame un informe exhaustivo, estructurado y clasificado sobre "${cleanTopic}" para ${clientDisplayName}, citando las fuentes provistas en "sources".`}
+                          </div>
+                        </div>
+
+                        {/* Opción 2: Custom GPT Actions */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-3">
-                          <h4 className="text-sm font-bold text-slate-900">Configuración para Custom GPTs de OpenAI</h4>
-                          <p className="text-sm text-slate-600 leading-relaxed">
+                          <h4 className="text-sm font-bold text-slate-900">Opción 2: Configuración para Custom GPTs de OpenAI (Actions)</h4>
+                          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                             En la configuración de tu GPT, ve a <strong>Configure &gt; Actions &gt; Create new action</strong> y pega la URL en la casilla <em>Import from URL</em>:
                           </p>
                           <div className="bg-slate-900 text-blue-300 p-3.5 rounded-xl flex items-center justify-between font-mono text-xs sm:text-sm border border-slate-800">
@@ -2242,7 +2381,7 @@ export default function Home() {
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON devuelto.\nPreséntame un informe clasificado y detallado con los servicios, productos y soluciones de ${clientDisplayName}, citando las fuentes originales provistas en "sources".`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON devuelto.\nPreséntame un informe clasificado y detallado con los resultados para "${cleanTopic}" sobre ${clientDisplayName}, citando las fuentes originales provistas en "sources".`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
@@ -2253,11 +2392,11 @@ export default function Home() {
                           </div>
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
-                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=servicios+productos+y+soluciones y lee el JSON devuelto.
-Preséntame un informe clasificado y detallado con los servicios, productos y soluciones de ${clientDisplayName}, citando las fuentes originales provistas en "sources".`}
+                            {`Accede a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=${encodedQueryParam} y lee el JSON devuelto.
+Preséntame un informe clasificado y detallado con los resultados para "${cleanTopic}" sobre ${clientDisplayName}, citando las fuentes originales provistas en "sources".`}
                           </div>
                           <p className="text-xs text-slate-500">
-                            La URL ya incluye los parámetros exactos (<code>&namespace={encodedNamespacePrompt}</code>) para evitar que Claude Web intente armar URLs en su sandbox.
+                            La URL ya incluye los parámetros exactos (<code>&namespace={encodedNamespacePrompt}&query={encodedQueryParam}</code>) para evitar que Claude Web intente armar URLs en su sandbox.
                           </p>
                         </div>
 
@@ -2271,7 +2410,7 @@ Preséntame un informe clasificado y detallado con los servicios, productos y so
                             <button
                               onClick={() =>
                                 copyToClipboard(
-                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.\nCuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.\nResponde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`
+                                  `Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.\nCuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=<nombre_cliente>&query=<palabras_clave_con_+> reemplazando <nombre_cliente> por el nombre exacto del cliente (ej. ${activeNamespacePrompt}) y los espacios con '+'.\nSi tu entorno no permite armar URLs automáticamente, indícame la URL completa necesaria para que yo la confirme.\nResponde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer shrink-0 self-start sm:self-auto"
@@ -2283,7 +2422,8 @@ Preséntame un informe clasificado y detallado con los servicios, productos y so
 
                           <div className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl font-mono text-xs sm:text-sm overflow-x-auto select-all border border-slate-800">
                             {`Accede a https://scrapio-one.vercel.app/api/v1/namespaces?key=${activeApiKey} y lee los clientes y herramientas MCP disponibles en mi cuenta.
-Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=${encodedNamespacePrompt}&query=<palabras_clave_con_+> reemplazando siempre los espacios con '+' en la URL.
+Cuando te haga una pregunta sobre algún cliente (ej. ${activeNamespacePrompt}), consulta mediante GET a https://scrapio-one.vercel.app/api/v1/query?key=${activeApiKey}&namespace=<nombre_cliente>&query=<palabras_clave_con_+> reemplazando <nombre_cliente> por el nombre exacto del cliente (ej. ${activeNamespacePrompt}) y los espacios con '+'.
+Si tu entorno no permite armar URLs automáticamente, indícame la URL completa necesaria para que yo la confirme.
 Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.`}
                           </div>
                           <p className="text-xs text-slate-500">
@@ -2366,7 +2506,7 @@ Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.
                             <h4 className="text-sm font-bold text-slate-900">Ejemplo cURL / API REST (Bash & macOS)</h4>
                             <button
                               onClick={() =>
-                                copyToClipboard(`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${activeApiKey}" \\\n  -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${activeNamespacePrompt}"}'`)
+                                copyToClipboard(`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${activeApiKey}" \\\n  -d '{"query": "${cleanTopic}", "namespace": "${activeNamespacePrompt}"}'`)
                               }
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                             >
@@ -2378,7 +2518,7 @@ Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.
                             <pre>{`curl -X POST https://scrapio-one.vercel.app/api/v1/query \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${activeApiKey}" \\
-  -d '{"query": "¿Cuáles son las condiciones?", "namespace": "${activeNamespacePrompt}"}'`}</pre>
+  -d '{"query": "${cleanTopic}", "namespace": "${activeNamespacePrompt}"}'`}</pre>
                           </div>
                         </div>
 
@@ -2387,7 +2527,7 @@ Responde con rigor basándote en los fragmentos obtenidos y citando las fuentes.
                             <h4 className="text-sm font-bold text-slate-900">Ejemplo Python (requests)</h4>
                             <button
                               onClick={() =>
-                                copyToClipboard(`import requests\n\nres = requests.post(\n    "https://scrapio-one.vercel.app/api/v1/query",\n    headers={\n        "Authorization": "Bearer ${activeApiKey}",\n        "Content-Type": "application/json"\n    },\n    json={\n        "query": "¿Cuáles son las condiciones?",\n        "namespace": "${activeNamespacePrompt}"\n    }\n)\nprint(res.json()["answer"])`)
+                                copyToClipboard(`import requests\n\nres = requests.post(\n    "https://scrapio-one.vercel.app/api/v1/query",\n    headers={\n        "Authorization": "Bearer ${activeApiKey}",\n        "Content-Type": "application/json"\n    },\n    json={\n        "query": "${cleanTopic}",\n        "namespace": "${activeNamespacePrompt}"\n    }\n)\nprint(res.json()["answer"])`)
                               }
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                             >
@@ -2405,7 +2545,7 @@ res = requests.post(
         "Content-Type": "application/json"
     },
     json={
-        "query": "¿Cuáles son las condiciones?",
+        "query": "${cleanTopic}",
         "namespace": "${activeNamespacePrompt}"
     }
 )
@@ -3042,14 +3182,25 @@ print(res.json()["answer"])`}</pre>
               <div className="pt-2 flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     setCustomGeminiKey("");
                     setCustomOpenaiKey("");
                     if (typeof window !== "undefined") {
                       localStorage.removeItem("scrapio_byok_gemini");
                       localStorage.removeItem("scrapio_byok_openai");
                     }
-                    alert("Claves eliminadas del almacenamiento local.");
+                    try {
+                      await fetch("/api/me", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "save_keys",
+                          geminiApiKey: "",
+                          openaiApiKey: "",
+                        }),
+                      });
+                    } catch {}
+                    alert("Claves restablecidas exitosamente.");
                   }}
                   className="px-4 py-2 text-base text-slate-600 hover:text-red-600 font-semibold cursor-pointer"
                 >

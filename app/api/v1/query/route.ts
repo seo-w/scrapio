@@ -49,7 +49,23 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     const topKRaw = body.topK || searchParams.get("topK");
     const topK = Math.min(20, Math.max(1, parseInt(String(topKRaw || "10"), 10) || 10));
     const aiProvider = (body.aiProvider || searchParams.get("aiProvider") || "gemini").toLowerCase();
-    const customApiKey = (body.customApiKey || searchParams.get("customApiKey") || "").trim() || undefined;
+
+    // Llave de OpenAI del usuario (asociada a su Scrapio API Key, parámetro o header) para uso directo o fallback
+    const userFallbackOpenAiKey = (
+      body.openaiApiKey ||
+      body.openaiKey ||
+      searchParams.get("openaiKey") ||
+      req.headers.get("x-openai-key") ||
+      authUser.customOpenAiKey ||
+      ""
+    ).trim() || undefined;
+
+    const customApiKey = (
+      body.customApiKey ||
+      searchParams.get("customApiKey") ||
+      (aiProvider === "openai" ? userFallbackOpenAiKey : authUser.customGeminiKey) ||
+      ""
+    ).trim() || undefined;
 
     const baseUrl = process.env.SCRAPIO_API_URL || "https://scrapio-one.vercel.app";
 
@@ -138,7 +154,7 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     // 1 & 2. Resolver namespace y generar vector embedding en paralelo
     const [resolvedNs, queryVector] = await Promise.all([
       resolvePineconeNamespace(namespace),
-      generateEmbedding(query, aiProvider, 3, customApiKey),
+      generateEmbedding(query, aiProvider, 3, customApiKey, userFallbackOpenAiKey),
     ]);
 
     // 3. Query Pinecone con ventana amplia de candidatos para re-ranking híbrido
@@ -166,8 +182,8 @@ async function handleQueryRequest(req: NextRequest, isPost: boolean) {
     // 4. Aplicar Re-ranking Híbrido léxico + semántico
     const contextChunks: ContextChunk[] = rerankHybridChunks(query, matches, topK);
 
-    // 5. Generar RAG sintetizado con IA
-    const { text, sources } = await generateRAGResponse(query, contextChunks, aiProvider, customApiKey);
+    // 5. Generar RAG sintetizado con IA (con fallback automático a OpenAI si Gemini tiene problemas de facturación o cuota)
+    const { text, sources } = await generateRAGResponse(query, contextChunks, aiProvider, customApiKey, userFallbackOpenAiKey);
 
     return NextResponse.json(
       {

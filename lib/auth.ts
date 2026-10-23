@@ -10,6 +10,8 @@ export interface ScrapioAuthUser {
   canUseOpenAI: boolean;
   canUseGemini: boolean;
   apiKey: string;
+  customOpenAiKey?: string;
+  customGeminiKey?: string;
 }
 
 /**
@@ -70,6 +72,16 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
     const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
     const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
 
+    const customOpenAiKey =
+      (user.publicMetadata?.openai_api_key as string) ||
+      (user.unsafeMetadata?.openai_api_key as string) ||
+      "";
+
+    const customGeminiKey =
+      (user.publicMetadata?.gemini_api_key as string) ||
+      (user.unsafeMetadata?.gemini_api_key as string) ||
+      "";
+
     return {
       userId,
       email: primaryEmail,
@@ -79,6 +91,8 @@ export async function getScrapioUser(): Promise<ScrapioAuthUser | null> {
       canUseOpenAI,
       canUseGemini,
       apiKey,
+      customOpenAiKey: customOpenAiKey || undefined,
+      customGeminiKey: customGeminiKey || undefined,
     };
   } catch (err) {
     console.warn("Error resolviendo usuario de Clerk en getScrapioUser:", err);
@@ -133,6 +147,7 @@ export async function validateScrapioApiKey(token: string): Promise<ScrapioAuthU
       canUseOpenAI: true,
       canUseGemini: true,
       apiKey: masterKey,
+      customOpenAiKey: process.env.OPENAI_API_KEY || undefined,
     };
   }
 
@@ -165,6 +180,16 @@ export async function validateScrapioApiKey(token: string): Promise<ScrapioAuthU
             const canUseOpenAI = isAdmin || !!user.publicMetadata?.can_use_openai;
             const canUseGemini = isAdmin || user.publicMetadata?.can_use_gemini !== false;
 
+            const customOpenAiKey =
+              (user.publicMetadata?.openai_api_key as string) ||
+              (user.unsafeMetadata?.openai_api_key as string) ||
+              "";
+
+            const customGeminiKey =
+              (user.publicMetadata?.gemini_api_key as string) ||
+              (user.unsafeMetadata?.gemini_api_key as string) ||
+              "";
+
             return {
               userId: user.id,
               email: primaryEmail,
@@ -174,6 +199,8 @@ export async function validateScrapioApiKey(token: string): Promise<ScrapioAuthU
               canUseOpenAI,
               canUseGemini,
               apiKey: storedKey,
+              customOpenAiKey: customOpenAiKey || undefined,
+              customGeminiKey: customGeminiKey || undefined,
             };
           }
         }

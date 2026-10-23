@@ -53,8 +53,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Vectorizar la consulta del usuario usando el proveedor y clave correspondiente
-    const queryVector = await generateEmbedding(query, provider, 3, customApiKey);
+    // 3. Vectorizar la consulta del usuario usando el proveedor y clave correspondiente (con fallback de OpenAI si aplica)
+    const queryVector = await generateEmbedding(query, provider, 3, customApiKey, user.customOpenAiKey);
 
     // 4. Recuperar candidatos desde Pinecone y aplicar re-ranking híbrido léxico en memoria
     const matches = await queryPinecone(namespace, queryVector, 12);
@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
 
     const contextChunks: ContextChunk[] = rerankHybridChunks(query, matches, 8);
 
-    // 5. Generar la respuesta RAG mediante el modelo seleccionado
-    const { text, sources } = await generateRAGResponse(query, contextChunks, provider, customApiKey);
+    // 5. Generar la respuesta RAG mediante el modelo seleccionado (con fallback a OpenAI del usuario)
+    const { text, sources } = await generateRAGResponse(query, contextChunks, provider, customApiKey, user.customOpenAiKey);
 
     return NextResponse.json({
       answer: text,
