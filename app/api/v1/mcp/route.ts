@@ -32,9 +32,32 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: "scrapio_query_client",
+    description:
+      "Realiza una consulta RAG semántica personalizada sobre el contenido del sitio web de un cliente. Devuelve respuestas sintetizadas con fuentes y CTAs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: {
+          type: "string",
+          description: "Nombre del cliente o sitio web a consultar (ej. 'Tivit', 'Avafin', 'Internexa', etc.)",
+        },
+        query: {
+          type: "string",
+          description: "Pregunta o tema a consultar",
+        },
+        topK: {
+          type: "number",
+          description: "Número de fragmentos relevantes a recuperar (por defecto 6, máx 20)",
+        },
+      },
+      required: ["namespace", "query"],
+    },
+  },
+  {
     name: "query_site",
     description:
-      "Realiza una consulta RAG semántica personalizada sobre el contenido del sitio web scrapeado de un cliente.",
+      "Alias de scrapio_query_client: Realiza una consulta RAG semántica sobre el contenido web de un cliente.",
     inputSchema: {
       type: "object",
       properties: {
@@ -56,9 +79,24 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: "scrapio_get_entities",
+    description:
+      "Extrae las entidades principales de un cliente: marcas, productos, servicios, personas y marcado Schema.org.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: {
+          type: "string",
+          description: "Nombre del cliente o sitio web (ej. 'Tivit', 'Avafin')",
+        },
+      },
+      required: ["namespace"],
+    },
+  },
+  {
     name: "get_site_entities",
     description:
-      "Extrae las entidades principales de un sitio web analizado: marcas, organizaciones, productos, personas y Schema.org.",
+      "Alias de scrapio_get_entities: Extrae las entidades principales de un sitio web analizado.",
     inputSchema: {
       type: "object",
       properties: {
@@ -186,7 +224,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (toolName === "query_site") {
+      if (toolName === "query_site" || toolName === "scrapio_query_client") {
         const query = (args.query || "").trim();
         const rawNamespace = (args.namespace || "").trim();
         const topK = Math.min(20, Math.max(1, parseInt(String(args.topK || "6"), 10) || 6));
@@ -268,7 +306,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (toolName === "get_site_entities") {
+      if (toolName === "get_site_entities" || toolName === "scrapio_get_entities") {
         const rawNamespace = (args.namespace || "").trim();
         if (!rawNamespace) {
           return NextResponse.json(

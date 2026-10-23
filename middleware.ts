@@ -4,6 +4,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/api/health(.*)",
   "/api/v1(.*)", // API Headless para MCP / Claude Desktop autenticada vía token SCRAPIO_API_KEY
   "/api/mcp(.*)", // Servidor MCP HTTP / SSE nativo
   "/api/openapi.json(.*)", // Especificación OpenAPI para GPTs y herramientas externas
