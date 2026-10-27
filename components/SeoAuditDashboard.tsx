@@ -42,6 +42,8 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   const [activeFilter, setActiveFilter] = useState<
     "all" | "orphan" | "cannibalized" | "thin" | "missing_meta" | "missing_title"
   >("all");
+  const [isCannibalizationExpanded, setIsCannibalizationExpanded] = useState(false);
+  const [selectedCannibalizationEntity, setSelectedCannibalizationEntity] = useState<string | null>(null);
 
   // Inspección de página individual
   const [selectedPage, setSelectedPage] = useState<any>(null);
@@ -104,7 +106,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   // Reset de página cuando cambian filtros o búsqueda
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeFilter, pageSize]);
+  }, [searchQuery, activeFilter, pageSize, selectedCannibalizationEntity]);
 
   // Filtrado de páginas
   const pages: any[] = data?.pages || [];
@@ -122,6 +124,14 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   };
 
   const filteredPages = pages.filter((page) => {
+    // Filtro específico por entidad canibalizada seleccionada
+    if (selectedCannibalizationEntity) {
+      const entName = (page.main_entity?.name || "").toLowerCase();
+      if (entName !== selectedCannibalizationEntity.toLowerCase()) {
+        return false;
+      }
+    }
+
     const matchesSearch =
       page.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (page.title && page.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -370,30 +380,145 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
         </div>
       </div>
 
-      {/* Alerta de Canibalización desplegable si existen */}
+      {/* Alerta de Canibalización Elegante y Compacta */}
       {data?.cannibalizations && data.cannibalizations.length > 0 && (
-        <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-4 space-y-2">
-          <div className="flex items-center gap-2 text-rose-900 font-bold text-sm">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>Alertas de Canibalización Semántica Detectadas ({data.cannibalizations.length}):</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-            {data.cannibalizations.map((c: any) => (
-              <div key={c.entityName} className="bg-white/80 border border-rose-100 rounded-lg p-2.5 space-y-1">
-                <span className="font-bold text-rose-950">Entidad: &ldquo;{c.entityName}&rdquo;</span>
-                <p className="text-slate-600">Compiten {c.urls.length} URLs por la misma entidad principal:</p>
-                <ul className="list-disc list-inside text-[11px] text-slate-500 truncate space-y-0.5">
-                  {c.urls.map((u: string) => (
-                    <li key={u} className="truncate hover:text-blue-600">
-                      <a href={u} target="_blank" rel="noopener noreferrer">
-                        {u}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+        <div className="bg-white border border-rose-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
               </div>
-            ))}
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                    Canibalizaciones Semánticas Detectadas
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                    {data.cannibalizations.length} temas en conflicto
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  URLs distintas que compiten por posicionar la misma entidad temática. Haz clic en un tema para filtrar la tabla.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsCannibalizationExpanded(!isCannibalizationExpanded)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+            >
+              <span>{isCannibalizationExpanded ? "Ocultar detalles" : `Ver los ${data.cannibalizations.length} temas`}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCannibalizationExpanded ? "rotate-180" : ""}`} />
+            </button>
           </div>
+
+          {/* Chips de Temas Rápidos */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Temas en conflicto:</span>
+            {data.cannibalizations.slice(0, isCannibalizationExpanded ? undefined : 6).map((c: any) => {
+              const isSelected = selectedCannibalizationEntity === c.entityName;
+              return (
+                <button
+                  key={c.entityName}
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedCannibalizationEntity(null);
+                    } else {
+                      setSelectedCannibalizationEntity(c.entityName);
+                      setActiveFilter("all");
+                    }
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-rose-600 text-white shadow-2xs"
+                      : "bg-rose-50/70 hover:bg-rose-100 text-rose-900 border border-rose-200/60"
+                  }`}
+                  title={`Filtrar tabla por ${c.urls.length} URLs de "${c.entityName}"`}
+                >
+                  <span>{c.entityName}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-rose-700 text-white" : "bg-rose-200/80 text-rose-800"}`}>
+                    {c.urls.length}
+                  </span>
+                </button>
+              );
+            })}
+            {!isCannibalizationExpanded && data.cannibalizations.length > 6 && (
+              <button
+                onClick={() => setIsCannibalizationExpanded(true)}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold px-1 py-0.5 cursor-pointer"
+              >
+                +{data.cannibalizations.length - 6} más...
+              </button>
+            )}
+          </div>
+
+          {/* Vista Expandida en Tarjetas Limpias */}
+          {isCannibalizationExpanded && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 max-h-72 overflow-y-auto">
+              {data.cannibalizations.map((c: any) => {
+                const isSelected = selectedCannibalizationEntity === c.entityName;
+                return (
+                  <div
+                    key={c.entityName}
+                    className={`rounded-xl p-3 border transition-all ${
+                      isSelected
+                        ? "bg-rose-50/90 border-rose-400 ring-2 ring-rose-400/40"
+                        : "bg-slate-50/60 border-slate-200/80 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="font-bold text-xs text-slate-900 truncate" title={c.entityName}>
+                        {c.entityName}
+                      </span>
+                      <button
+                        onClick={() => setSelectedCannibalizationEntity(isSelected ? null : c.entityName)}
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded cursor-pointer ${
+                          isSelected ? "bg-rose-600 text-white" : "bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50"
+                        }`}
+                      >
+                        {isSelected ? "Quitar filtro" : `Filtrar (${c.urls.length})`}
+                      </button>
+                    </div>
+                    <ul className="space-y-1 text-[11px] text-slate-500">
+                      {c.urls.slice(0, 3).map((u: string) => (
+                        <li key={u} className="truncate flex items-center gap-1 hover:text-blue-600">
+                          <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0"></span>
+                          <a href={u} target="_blank" rel="noopener noreferrer" className="truncate">
+                            {u.replace(/^https?:\/\/(www\.)?/, "")}
+                          </a>
+                        </li>
+                      ))}
+                      {c.urls.length > 3 && (
+                        <li className="text-[10px] text-slate-400 italic">
+                          +{c.urls.length - 3} URLs adicionales...
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Indicador de filtro de canibalización activo */}
+      {selectedCannibalizationEntity && (
+        <div className="flex items-center justify-between gap-2 px-3.5 py-2 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">Filtrando URLs por canibalización:</span>
+            <span className="px-2 py-0.5 rounded bg-rose-200/80 font-mono font-bold text-rose-950">
+              {selectedCannibalizationEntity}
+            </span>
+            <span className="text-rose-700">({filteredPages.length} URLs encontradas)</span>
+          </div>
+          <button
+            onClick={() => setSelectedCannibalizationEntity(null)}
+            className="inline-flex items-center gap-1 font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Quitar filtro</span>
+          </button>
         </div>
       )}
 

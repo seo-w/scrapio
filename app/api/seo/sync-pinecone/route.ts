@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 import { getPineconeIndex, resolvePineconeNamespace } from "@/lib/pinecone";
-import { getSupabaseClient, savePagesBatchToSupabase, populateLinksAndEntitiesForPages, PageRecord } from "@/lib/supabase";
+import { getSupabaseClient, savePagesBatchToSupabase, populateLinksAndEntitiesForPages, cleanCanonicalUrl, PageRecord } from "@/lib/supabase";
 import { toSlug } from "@/lib/crawler";
 
 export const dynamic = "force-dynamic";
@@ -62,8 +62,12 @@ export async function POST(req: NextRequest) {
       const meta = match.metadata as any;
       if (!meta || !meta.url) continue;
 
-      if (!urlMap.has(meta.url)) {
-        urlMap.set(meta.url, {
+      // Limpiar y canonicalizar URL eliminando UTMs y parámetros de tracking
+      const canonicalUrl = cleanCanonicalUrl(meta.url);
+      if (!canonicalUrl) continue;
+
+      if (!urlMap.has(canonicalUrl)) {
+        urlMap.set(canonicalUrl, {
           h1: meta.h1 || "Sin Título",
           chunks: [],
           createdAt: meta.createdAt,
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (meta.text_chunk) {
-        urlMap.get(meta.url)!.chunks.push(meta.text_chunk);
+        urlMap.get(canonicalUrl)!.chunks.push(meta.text_chunk);
       }
     }
 

@@ -99,10 +99,38 @@ turndownService.remove((node) => {
   return ["script", "style", "nav", "footer", "header", "noscript", "iframe", "svg"].includes(name);
 });
 
+/**
+ * Limpia y canonicaliza una URL eliminando UTMs, parámetros de tracking y hashes
+ */
+export function cleanCanonicalUrl(raw: string, base?: string): string {
+  try {
+    const p = base ? new URL(raw, base) : new URL(raw);
+    if (!p.protocol.startsWith("http")) return raw;
+
+    const trackingParams = [
+      "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+      "fbclid", "gclid", "msclkid", "mc_cid", "mc_eid", "ref", "source",
+      "_ga", "_gl", "_hsenc", "_hsmi", "yclid", "dclid"
+    ];
+    for (const param of trackingParams) {
+      p.searchParams.delete(param);
+    }
+
+    p.hash = "";
+    let pathname = p.pathname.replace(/\/$/, "");
+    if (!pathname) pathname = "";
+
+    const search = p.search ? p.search : "";
+    return `${p.protocol}//${p.host}${pathname}${search}`;
+  } catch {
+    return raw;
+  }
+}
+
 function normalizeUrl(raw: string, base: string): string | null {
   try {
-    const p = new URL(raw, base);
-    return p.protocol.startsWith("http") ? `${p.origin}${p.pathname}${p.search}` : null;
+    const cleaned = cleanCanonicalUrl(raw, base);
+    return cleaned.startsWith("http") ? cleaned : null;
   } catch {
     return null;
   }
@@ -118,7 +146,8 @@ function isSameDomain(a: string, b: string): boolean {
 
 export function toSlug(rawUrl: string): string {
   try {
-    const p = new URL(rawUrl).pathname.replace(/^\/|\/$/g, "").replace(/\.html$/, "");
+    const cleaned = cleanCanonicalUrl(rawUrl);
+    const p = new URL(cleaned).pathname.replace(/^\/|\/$/g, "").replace(/\.html$/, "");
     return p || "inicio";
   } catch {
     return "pagina";

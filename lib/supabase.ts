@@ -58,6 +58,34 @@ export function getSupabaseClient(): SupabaseClient | null {
   return supabaseClient;
 }
 
+/**
+ * Limpia y canonicaliza una URL eliminando UTMs, parámetros de tracking y hashes
+ */
+export function cleanCanonicalUrl(raw: string, base?: string): string {
+  try {
+    const p = base ? new URL(raw, base) : new URL(raw);
+    if (!p.protocol.startsWith("http")) return raw;
+
+    const trackingParams = [
+      "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+      "fbclid", "gclid", "msclkid", "mc_cid", "mc_eid", "ref", "source",
+      "_ga", "_gl", "_hsenc", "_hsmi", "yclid", "dclid"
+    ];
+    for (const param of trackingParams) {
+      p.searchParams.delete(param);
+    }
+
+    p.hash = "";
+    let pathname = p.pathname.replace(/\/$/, "");
+    if (!pathname) pathname = "";
+
+    const search = p.search ? p.search : "";
+    return `${p.protocol}//${p.host}${pathname}${search}`;
+  } catch {
+    return raw;
+  }
+}
+
 export interface PageRecord {
   id?: string;
   namespace: string;
@@ -100,13 +128,14 @@ export async function savePageToSupabase(page: PageRecord) {
   if (!supabase) return null;
 
   try {
+    const cleanUrl = cleanCanonicalUrl(page.url);
     const payload: Record<string, any> = {
       namespace: page.namespace,
-      url: page.url,
+      url: cleanUrl,
       title: page.title || "",
       h1: page.h1 || "",
       meta_description: page.meta_description || "",
-      canonical: page.canonical || page.url,
+      canonical: cleanCanonicalUrl(page.canonical || cleanUrl),
       markdown_content: page.markdown_content || "",
       crawled_at: new Date().toISOString(),
     };
@@ -165,13 +194,14 @@ export async function savePagesBatchToSupabase(pages: PageRecord[]): Promise<num
   for (let i = 0; i < pages.length; i += BATCH_SIZE) {
     const chunk = pages.slice(i, i + BATCH_SIZE);
     const payloads = chunk.map((page) => {
+      const cleanUrl = cleanCanonicalUrl(page.url);
       const payload: Record<string, any> = {
         namespace: page.namespace,
-        url: page.url,
+        url: cleanUrl,
         title: page.title || "",
         h1: page.h1 || "",
         meta_description: page.meta_description || "",
-        canonical: page.canonical || page.url,
+        canonical: cleanCanonicalUrl(page.canonical || cleanUrl),
         markdown_content: page.markdown_content || "",
         crawled_at: page.crawled_at || new Date().toISOString(),
       };
@@ -230,7 +260,7 @@ export async function saveInternalLinksToSupabase(
 
     const rows = links.map((link) => ({
       source_page_id: sourcePageId,
-      target_url: link.target_url,
+      target_url: cleanCanonicalUrl(link.target_url),
       anchor_text: (link.anchor_text || "").trim().slice(0, 255),
     }));
 
@@ -494,7 +524,7 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
     for (const link of internalLinks || []) {
       outlinksCountByPageId[link.source_page_id] = (outlinksCountByPageId[link.source_page_id] || 0) + 1;
 
-      const normTarget = link.target_url.replace(/\/$/, "");
+      const normTarget = cleanCanonicalUrl(link.target_url);
       inlinksCountByUrl[normTarget] = (inlinksCountByUrl[normTarget] || 0) + 1;
 
       if (link.anchor_text) {
@@ -550,7 +580,7 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
     let totalWords = 0;
 
     const auditedPages = pages.map((p) => {
-      const normUrl = p.url.replace(/\/$/, "");
+      const normUrl = cleanCanonicalUrl(p.url);
       const inlinks = inlinksCountByUrl[normUrl] || inlinksCountByUrl[p.url] || 0;
       const outlinks = outlinksCountByPageId[p.id] || 0;
       const mainEnt = mainEntityByPageId[p.id];
