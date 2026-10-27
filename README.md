@@ -20,6 +20,39 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
+### 2026-10-26 — Feat: Motor de Auditoría SEO y Grafo de Conocimiento (Supabase + Pinecone), Arquitectura Screaming Frog, Detección de Páginas Huérfanas y Herramientas MCP Avanzadas
+
+**Problema resuelto:**
+1. **Pérdida de la visión holística del sitio:** Pinecone solo almacenaba fragmentos vectorizados de ~500 tokens (`text_chunk`). Aunque esto es ideal para RAG semántico, impedía conocer la arquitectura de enlazado interno, auditar páginas huérfanas, detectar canibalizaciones de H1s/títulos o evaluar el conteo de palabras por página.
+2. **Falta de Markdown completo y Wikilinks:** Al no persistir el contenido completo del artículo con Frontmatter YAML y `[[Wikilinks]]`, los LLMs no podían redactar contenido nuevo manteniendo la consistencia de enlazado interno del cliente.
+3. **Validación de Schema.org costosa:** Diagnosticar esquemas JSON-LD requería gastar tokens de LLM en cada análisis en lugar de extraerlos del HTML original o generarlos con IDs oficiales de Google Knowledge Graph y Wikidata.
+4. **Navegación del Sidebar y Casing en Base de Datos:** El selector del sidebar no restablecía correctamente la vista hacia el chat, y las consultas de PostgreSQL en Supabase eran sensibles a mayúsculas (`eq("namespace", "avafin")` vs `"Avafin"`), mostrando erróneamente 0 páginas si no coincidía el caso exacto.
+
+**Mejoras implementadas:**
+1. **Arquitectura Híbrida de Doble Motor (Pinecone + Supabase PostgreSQL):**
+   * **Pinecone (Vector DB):** Continúa como motor ultrarrápido para RAG, embeddings (768d) y búsqueda semántica con citas de fuentes.
+   * **Supabase (PostgreSQL Relacional):** Almacena las páginas completas en Markdown, metadatos enriquecidos (slug, H1, idioma, word count, YAML frontmatter), relaciones de enlaces internos (`internal_links`) y entidades del grafo (`entities`, `page_entities`).
+2. **Pantalla de Auditoría SEO & Arquitectura Web (Estilo Screaming Frog):**
+   * **KPIs de Salud SEO en Tiempo Real:** Total de páginas, Enlaces internos contextuales, Entidades KG identificadas, Páginas huérfanas (0 inlinks entrantes), Alertas de canibalización y Contenido pobre (*Thin Content* <300 palabras).
+   * **Tabla Maestra de URLs:** Buscador en vivo, filtros rápidos por anomalía (huérfanas, canibalizaciones, sin H1, etc.) y exportador a CSV compatible con Excel.
+   * **Drawer de Inspección Técnica Lateral:**
+     * Pestaña *Markdown*: Muestra el artículo completo formateado con `[[Wikilinks]]`.
+     * Pestaña *Schema JSON-LD*: Diagnóstico sintáctico en vivo de esquemas existentes vs generados con enlace directo a la herramienta oficial *Google Rich Results Test*.
+3. **Sincronización en 1 Clic desde Pinecone (`POST /api/seo/sync-pinecone`):**
+   * Botón **"📥 Poblar Supabase desde Pinecone"** que agrupa los vectores existentes por URL, reconstruye el Markdown con Frontmatter y guarda en bloques de 50 páginas en Supabase en 1–2 segundos, sin necesidad de re-escanear el sitio web ni estresar los servidores del cliente.
+4. **Crawler Enriquecido (`lib/crawler.ts`):**
+   * Extrae enlaces internos editoriales dentro del contenido y detecta esquemas JSON-LD en vivo con Cheerio.
+   * Genera slugs limpios y transforma los hipervínculos internos en formato `[[Wikilinks]]`.
+   * Preserva el chunking limpio para Pinecone sin contaminación de frontmatter.
+5. **Nuevas Herramientas MCP para Claude Desktop, Cursor y ChatGPT (`app/api/v1/mcp/route.ts`):**
+   * **`get_seo_audit`**: Permite a cualquier agente de IA auditar la salud técnica, canibalizaciones y enlaces huérfanos de un namespace.
+   * **`get_page_markdown`**: Entrega el Markdown completo de cualquier URL para que el LLM redacte o actualice contenidos respetando los enlaces internos y entidades del sitio.
+6. **Resiliencia de Mayúsculas/Minúsculas y Navegación:**
+   * Consultas SQL en `lib/supabase.ts` normalizadas con `ilike` para que `Avafin`, `avafin` o `AVAFIN` resuelvan con exactitud.
+   * Corrección de estado en `app/page.tsx` para alternar fluidamente entre el Chat RAG y la Auditoría SEO desde el sidebar y la barra superior.
+
+---
+
 ### 2026-10-23 — Feat: Cadena de Fallback Multi-Modelo (Gemini / OpenAI), Sincronización BYOK en Clerk y Generador Adaptativo de Prompts LLM
 
 **Problema resuelto:**
@@ -265,6 +298,12 @@ CLERK_SECRET_KEY=sk_test_...
 
 # Correo del Administrador principal
 ADMIN_EMAIL=avraxas@gmail.com
+
+# Supabase (PostgreSQL para Markdown, Wikilinks, Entidades y Auditoría SEO)
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_supabase_service_role_secret_key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_public_key
 ```
 
 ---
@@ -380,6 +419,19 @@ npm run mcp
   }
   ```
 
+### 10. Auditoría SEO Técnica & Arquitectura Web (`GET /api/seo/audit?namespace=...`)
+* Devuelve el inventario holístico del cliente: KPIs de salud SEO, páginas huérfanas, canibalizaciones temáticas, enlaces entrantes/salientes, conteo de palabras y esquemas JSON-LD.
+* Utiliza búsqueda case-insensitive (`ilike`), tolerando cualquier variante de mayúsculas/minúsculas.
+
+### 11. Sincronización en 1 Clic desde Pinecone a Supabase (`POST /api/seo/sync-pinecone`)
+* Extrae todos los vectores con metadata de un namespace en Pinecone, reconstruye el documento Markdown con Frontmatter y guarda en Supabase en bloques de 50 páginas en segundos.
+* **Body:**
+  ```json
+  {
+    "namespace": "Avafin"
+  }
+  ```
+
 ---
 
 ## 🔌 Servidor MCP (Model Context Protocol)
@@ -414,6 +466,8 @@ Utiliza el script independiente [`scripts/mcp-server.mjs`](file:///c:/Users/seo_
 1. `list_scraped_sites`: Retorna todos los sitios y clientes indexados con cantidad de vectores.
 2. `query_site`: Ejecuta búsqueda semántica RAG citando fuentes exactas del sitio indexado.
 3. `get_site_entities`: Extrae entidades SEO, productos, servicios y marcado Schema.org del sitio.
+4. `get_seo_audit`: Retorna la auditoría técnica completa del cliente (páginas huérfanas, canibalizaciones, enlaces internos y estado de Schema.org).
+5. `get_page_markdown`: Recupera el artículo Markdown íntegro con `[[Wikilinks]]` de cualquier URL para tareas de redacción y optimización.
 
 ---
 
@@ -422,17 +476,21 @@ Utiliza el script independiente [`scripts/mcp-server.mjs`](file:///c:/Users/seo_
 1. Sube tu código a GitHub (`main`).
 2. Conecta el repositorio en Vercel.
 3. En **Settings > Environment Variables**:
-   * Variables de tipo **Config**:
+   * Variables de tipo **Config / Plaintext**:
      * `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
      * `NEXT_PUBLIC_CLERK_SIGN_IN_URL` (`/sign-in`)
      * `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (`/sign-up`)
      * `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` (`/`)
      * `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL` (`/`)
+     * `NEXT_PUBLIC_SUPABASE_URL` (`https://<tu-id>.supabase.co`)
+     * `SUPABASE_URL` (`https://<tu-id>.supabase.co`)
      * `ADMIN_EMAIL` (`avraxas@gmail.com`)
      * `PINECONE_INDEX_NAME` (`scrapio`)
      * `AI_PROVIDER` (`gemini`)
    * Variables de tipo **Secret**:
      * `CLERK_SECRET_KEY`
+     * `SUPABASE_SERVICE_ROLE_KEY`
+     * `NEXT_PUBLIC_SUPABASE_ANON_KEY`
      * `GEMINI_API_KEY`
      * `PINECONE_API_KEY`
      * `OPENAI_API_KEY` (opcional)
