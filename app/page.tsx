@@ -38,7 +38,9 @@ import {
   Menu,
   Terminal,
   Activity,
+  Network,
 } from "lucide-react";
+import SeoAuditDashboard from "@/components/SeoAuditDashboard";
 
 interface Message {
   id: string;
@@ -216,6 +218,9 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingNamespaces, setIsLoadingNamespaces] = useState(false);
+
+  // Vista activa: Chat RAG o Pantalla de Auditoría SEO & Knowledge Graph
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<"chat" | "seo_audit">("chat");
 
   // Modales
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1068,6 +1073,27 @@ export default function Home() {
               </span>
             </button>
 
+            {/* Pantalla de Auditoría & Arquitectura SEO */}
+            <button
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setActiveWorkspaceView("seo_audit");
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-base transition-colors cursor-pointer ${
+                activeWorkspaceView === "seo_audit"
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                  : "text-slate-700 hover:bg-slate-200/50"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Network className="w-5 h-5 text-indigo-600" />
+                <span>Auditoría & SEO</span>
+              </div>
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                Screaming Frog
+              </span>
+            </button>
+
             {/* Integraciones */}
             <button
               onClick={() => {
@@ -1327,6 +1353,18 @@ export default function Home() {
                   >
                     <span>🔍 Ver URLs</span>
                   </button>
+                  <span className="text-slate-400 hidden sm:inline">·</span>
+                  <button
+                    onClick={() => setActiveWorkspaceView(activeWorkspaceView === "seo_audit" ? "chat" : "seo_audit")}
+                    className={`text-xs sm:text-base font-semibold cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all ${
+                      activeWorkspaceView === "seo_audit"
+                        ? "bg-indigo-600 text-white shadow-xs"
+                        : "text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200/60"
+                    }`}
+                    title="Alternar entre Chat RAG y la Pantalla de Auditoría SEO & Arquitectura"
+                  >
+                    <span>{activeWorkspaceView === "seo_audit" ? "💬 Volver al Chat" : "🕸️ Auditoría SEO"}</span>
+                  </button>
                 </>
               ) : (
                 <>
@@ -1355,8 +1393,15 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Chat Thread Section */}
-          <section className="space-y-4 sm:space-y-6 flex-1 flex flex-col justify-center" data-purpose="chat-thread">
+          {activeWorkspaceView === "seo_audit" && namespace ? (
+            <SeoAuditDashboard
+              namespace={namespace}
+              onBackToChat={() => setActiveWorkspaceView("chat")}
+            />
+          ) : (
+            <>
+              {/* Chat Thread Section */}
+              <section className="space-y-4 sm:space-y-6 flex-1 flex flex-col justify-center" data-purpose="chat-thread">
             {availableNamespaces.length === 0 ? (
               <div className="bg-white border border-[#94A3B8] rounded-2xl p-6 sm:p-10 shadow-2xs text-center space-y-4 max-w-xl mx-auto my-6">
                 <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
@@ -1678,6 +1723,8 @@ export default function Home() {
               ))}
             </div>
           </section>
+            </>
+          )}
         </div>
       </main>
       {/* END: MainContent */}

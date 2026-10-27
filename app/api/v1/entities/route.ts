@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone, resolvePineconeNamespace } from "@/lib/pinecone";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
+import { getEntityGraphByNamespace, summarizeGraph } from "@/lib/supabase";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -105,17 +106,24 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
 
 Presenta la información de forma ejecutiva, limpia y precisa.`;
 
-    const { text, sources } = await generateRAGResponse(prompt, contextChunks, aiProvider, customApiKey, userFallbackOpenAiKey);
+    // 3. Consultar grafo estructurado en Supabase si existe
+    const [rawGraph, ragResult] = await Promise.all([
+      getEntityGraphByNamespace(namespace),
+      generateRAGResponse(prompt, contextChunks, aiProvider, customApiKey, userFallbackOpenAiKey),
+    ]);
+
+    const structuredGraph = rawGraph && rawGraph.pages.length > 0 ? summarizeGraph(rawGraph) : null;
 
     return NextResponse.json(
       {
         status: "success",
         namespace,
         requestedNamespace: rawNamespace,
-        analysis: text,
-        sources,
+        analysis: ragResult.text,
+        sources: ragResult.sources,
         chunksAnalyzed: contextChunks.length,
         providerUsed: aiProvider,
+        graph: structuredGraph,
       },
       { headers: CORS_HEADERS }
     );

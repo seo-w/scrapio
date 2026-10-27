@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone } from "@/lib/pinecone";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
+import { getEntityGraphByNamespace, summarizeGraph } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const user = await getScrapioUserOrApiKey(req);
@@ -101,14 +102,20 @@ async function processEntities(namespace: string, aiProvider?: string) {
 
 Presenta la información de forma ejecutiva, limpia y precisa.`;
 
-    const { text, sources } = await generateRAGResponse(prompt, contextChunks, aiProvider);
+    const [rawGraph, ragResult] = await Promise.all([
+      getEntityGraphByNamespace(namespace),
+      generateRAGResponse(prompt, contextChunks, aiProvider),
+    ]);
+
+    const structuredGraph = rawGraph && rawGraph.pages.length > 0 ? summarizeGraph(rawGraph) : null;
 
     return NextResponse.json({
       namespace,
-      analysis: text,
-      sources,
+      analysis: ragResult.text,
+      sources: ragResult.sources,
       chunksAnalyzed: contextChunks.length,
       providerUsed: aiProvider || process.env.AI_PROVIDER || "gemini",
+      graph: structuredGraph,
     });
   } catch (error: any) {
     console.error("Error en processEntities:", error);

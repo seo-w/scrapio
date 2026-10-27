@@ -1,6 +1,9 @@
 import * as cheerio from "cheerio";
 import TurndownService from "turndown";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { savePageToSupabase, saveInternalLinksToSupabase } from "./supabase";
+import { processAndSavePageEntities } from "./knowledge-graph";
+import { extractExistingJsonLd } from "./schema";
 
 export interface PageChunk {
   url: string;
@@ -15,6 +18,8 @@ export interface CrawlOptions {
   chunkSize?: number;
   chunkOverlap?: number;
   useSitemap?: boolean;
+  namespace?: string;
+  syncEntities?: boolean;
 }
 
 const turndownService = new TurndownService({
@@ -109,6 +114,38 @@ function isSameDomain(a: string, b: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function toSlug(rawUrl: string): string {
+  try {
+    const p = new URL(rawUrl).pathname.replace(/^\/|\/$/g, "").replace(/\.html$/, "");
+    return p || "inicio";
+  } catch {
+    return "pagina";
+  }
+}
+
+/**
+ * Transforma enlaces internos en formato Obsidian Wikilinks [[slug|anchor]]
+ * preservando enlaces externos como Markdown estándar [anchor](url)
+ */
+export function convertLinksToWikilinks(markdownText: string, baseUrl: string): string {
+  return markdownText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, anchor, href) => {
+    try {
+      const resolved = normalizeUrl(href, baseUrl);
+      if (resolved && isSameDomain(resolved, baseUrl)) {
+        const slug = toSlug(resolved);
+        const cleanAnchor = anchor.trim();
+        if (cleanAnchor && cleanAnchor !== slug) {
+          return `[[${slug}|${cleanAnchor}]]`;
+        }
+        return `[[${slug}]]`;
+      }
+      return match;
+    } catch {
+      return match;
+    }
+  });
 }
 
 /**
@@ -244,7 +281,29 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
       const html = await response.text();
       const $ = cheerio.load(html);
 
-      const h1Text = $("h1").first().text().trim() || $("title").text().trim() || "Sin Título";
+      const titleText = $("title").text().trim();
+      const h1Text = $("h1").first().text().trim() || titleText || "Sin Título";
+      const metaDescription = $('meta[name="description"]').attr("content")?.trim() || "";
+      const canonical = $('link[rel="canonical"]').attr("href")?.trim() || url;
+
+      // Extraer enlaces internos antes de sanitizar el HTML
+      const internalLinks: Array<{ target_url: string; anchor_text: string }> = [];
+      const seenLinks = new Set<string>();
+
+      $("a[href]").each((_, el) => {
+        const href = $(el).attr("href");
+        const anchorText = $(el).text().trim();
+        if (href) {
+          const resolved = normalizeUrl(href, url);
+          if (resolved && isSameDomain(resolved, normalizedStart)) {
+            const linkKey = `${resolved}|${anchorText}`;
+            if (!seenLinks.has(linkKey)) {
+              seenLinks.add(linkKey);
+              internalLinks.push({ target_url: resolved, anchor_text: anchorText });
+            }
+          }
+        }
+      });
 
       // 1. Detectar y convertir imágenes que son enlaces a portales/formularios en CTAs explícitos
       $("a").each((_, el) => {
@@ -271,6 +330,54 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
       const markdown = turndownService.turndown(htmlContent).trim();
 
       if (markdown.length > 50) {
+        const slug = toSlug(url);
+        const language = $("html").attr("lang")?.trim() || "es";
+        const { raw: existingSchema } = extractExistingJsonLd($);
+        const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+        const wikilinkMarkdown = convertLinksToWikilinks(markdown, normalizedStart);
+
+        const fullMarkdown = `---
+url: "${url}"
+slug: "${slug}"
+title: "${titleText.replace(/"/g, '\\"')}"
+h1: "${h1Text.replace(/"/g, '\\"')}"
+canonical: "${canonical}"
+meta_description: "${metaDescription.replace(/"/g, '\\"')}"
+language: "${language}"
+word_count: ${wordCount}
+crawled_at: "${new Date().toISOString()}"
+---
+
+${wikilinkMarkdown}`;
+
+        // Guardar página y enlaces en Supabase en segundo plano si hay namespace
+        if (options.namespace) {
+          savePageToSupabase({
+            namespace: options.namespace,
+            url,
+            slug,
+            title: titleText,
+            h1: h1Text,
+            meta_description: metaDescription,
+            canonical,
+            language,
+            word_count: wordCount,
+            existing_schema: existingSchema.length > 0 ? existingSchema : null,
+            markdown_content: fullMarkdown,
+          })
+            .then(async (pageId) => {
+              if (pageId) {
+                if (internalLinks.length > 0) {
+                  await saveInternalLinksToSupabase(pageId, internalLinks);
+                }
+                if (options.syncEntities) {
+                  await processAndSavePageEntities(pageId, url, h1Text, wikilinkMarkdown);
+                }
+              }
+            })
+            .catch((err) => console.warn(`⚠️ Error guardando en Supabase (${url}):`, err.message));
+        }
+
         const chunks = await textSplitter.splitText(markdown);
         for (const chunkText of chunks) {
           allChunks.push({
@@ -314,7 +421,9 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
 export async function scrapeSingleUrl(
   url: string,
   chunkSize = 1000,
-  chunkOverlap = 150
+  chunkOverlap = 150,
+  namespace?: string,
+  syncEntities = false
 ): Promise<PageChunk[]> {
   const origin = new URL(url).origin;
   let response = await fetch(toScraperUrl(url), { headers: getHeaders(origin) });
@@ -338,7 +447,28 @@ export async function scrapeSingleUrl(
   const html = await response.text();
   const $ = cheerio.load(html);
 
-  const h1Text = $("h1").first().text().trim() || $("title").text().trim() || "Sin Título";
+  const titleText = $("title").text().trim();
+  const h1Text = $("h1").first().text().trim() || titleText || "Sin Título";
+  const metaDescription = $('meta[name="description"]').attr("content")?.trim() || "";
+  const canonical = $('link[rel="canonical"]').attr("href")?.trim() || url;
+
+  // Extraer enlaces internos
+  const internalLinks: Array<{ target_url: string; anchor_text: string }> = [];
+  const seenLinks = new Set<string>();
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    const anchorText = $(el).text().trim();
+    if (href) {
+      const resolved = normalizeUrl(href, url);
+      if (resolved && isSameDomain(resolved, origin)) {
+        const key = `${resolved}|${anchorText}`;
+        if (!seenLinks.has(key)) {
+          seenLinks.add(key);
+          internalLinks.push({ target_url: resolved, anchor_text: anchorText });
+        }
+      }
+    }
+  });
 
   // 1. Detectar y convertir imágenes que son enlaces en CTAs
   $("a").each((_, el) => {
@@ -365,6 +495,54 @@ export async function scrapeSingleUrl(
 
   if (markdown.length < 50) {
     throw new Error("La página tiene contenido insuficiente o está protegida contra scraping.");
+  }
+
+  const slug = toSlug(url);
+  const language = $("html").attr("lang")?.trim() || "es";
+  const { raw: existingSchema } = extractExistingJsonLd($);
+  const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+  const wikilinkMarkdown = convertLinksToWikilinks(markdown, origin);
+
+  const fullMarkdown = `---
+url: "${url}"
+slug: "${slug}"
+title: "${titleText.replace(/"/g, '\\"')}"
+h1: "${h1Text.replace(/"/g, '\\"')}"
+canonical: "${canonical}"
+meta_description: "${metaDescription.replace(/"/g, '\\"')}"
+language: "${language}"
+word_count: ${wordCount}
+crawled_at: "${new Date().toISOString()}"
+---
+
+${wikilinkMarkdown}`;
+
+  // Guardar en Supabase si se especificó namespace
+  if (namespace) {
+    savePageToSupabase({
+      namespace,
+      url,
+      slug,
+      title: titleText,
+      h1: h1Text,
+      meta_description: metaDescription,
+      canonical,
+      language,
+      word_count: wordCount,
+      existing_schema: existingSchema.length > 0 ? existingSchema : null,
+      markdown_content: fullMarkdown,
+    })
+      .then(async (pageId) => {
+        if (pageId) {
+          if (internalLinks.length > 0) {
+            await saveInternalLinksToSupabase(pageId, internalLinks);
+          }
+          if (syncEntities) {
+            await processAndSavePageEntities(pageId, url, h1Text, wikilinkMarkdown);
+          }
+        }
+      })
+      .catch((err) => console.warn(`⚠️ Error guardando single-url en Supabase (${url}):`, err.message));
   }
 
   const textSplitter = new RecursiveCharacterTextSplitter({

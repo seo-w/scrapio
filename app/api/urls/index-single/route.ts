@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Descargar y procesar la URL específica
-    const chunks = await scrapeSingleUrl(url);
+    // 3. Descargar y procesar la URL específica (persistiendo en Supabase y Pinecone)
+    const chunks = await scrapeSingleUrl(url, 1000, 150, namespace, true);
 
     if (chunks.length === 0) {
       return NextResponse.json(

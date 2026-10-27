@@ -66,13 +66,15 @@ async function main() {
   }
 
   // 1. Rastreo de dominio
-  console.log(`🌐 Fase 1: Rastreo y descubrimiento de URLs...`);
+  console.log(`🌐 Fase 1: Rastreo y descubrimiento de URLs (Guardando Markdown y Grafo en Supabase)...`);
   const chunks = await crawlDomain({
     startUrl: targetUrl,
     maxPages,
     maxDepth: 3,
     chunkSize: 1000,
     chunkOverlap: 150,
+    namespace,
+    syncEntities: true,
   });
 
   if (chunks.length === 0) {
