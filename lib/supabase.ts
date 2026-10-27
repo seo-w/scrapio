@@ -561,15 +561,33 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
       }
     }
 
-    // Alertas de canibalización
+    // Alertas de canibalización con información enriquecida de páginas competidoras
     const cannibalizations = Object.entries(mainEntityToUrls)
       .filter(([_, urls]) => urls.length > 1)
-      .map(([entityName, urls]) => ({
-        entityName,
-        urls,
-      }));
+      .map(([entityName, urls]) => {
+        const competingPages = urls.map((u) => {
+          const normU = cleanCanonicalUrl(u);
+          const p = pages.find((pg) => cleanCanonicalUrl(pg.url) === normU || pg.url === u);
+          const inlinks = inlinksCountByUrl[normU] || (p ? inlinksCountByUrl[p.url] : 0) || 0;
+          return {
+            url: normU,
+            slug: p?.slug || (p ? new URL(p.url).pathname.replace(/^\/|\/$/g, "") : "") || "inicio",
+            title: p?.title || "",
+            h1: p?.h1 || "",
+            inlinks_count: inlinks,
+            word_count: p?.word_count || (p?.markdown_content ? p.markdown_content.split(/\s+/).filter(Boolean).length : 0),
+          };
+        }).sort((a, b) => b.inlinks_count - a.inlinks_count);
 
-    const cannibalizedEntityNames = new Set(cannibalizations.map((c) => c.entityName));
+        return {
+          entityName,
+          urls, // retrocompatibilidad con arrays de strings
+          competingPages,
+        };
+      })
+      .sort((a, b) => b.competingPages.length - a.competingPages.length);
+
+    const cannibalizationByEntity = new Map(cannibalizations.map((c) => [c.entityName, c]));
 
     // Procesar cada página con sus métricas
     let thinCount = 0;
@@ -592,7 +610,12 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
       const isMissingTitle = !p.title || p.title.trim().length === 0;
       const isMissingH1 = !p.h1 || p.h1.trim().length === 0 || p.h1 === "Sin Título";
       const isMissingMeta = !p.meta_description || p.meta_description.trim().length === 0;
-      const isCannibalized = Boolean(mainEnt && cannibalizedEntityNames.has(mainEnt.name));
+
+      const cInfo = mainEnt ? cannibalizationByEntity.get(mainEnt.name) : undefined;
+      const competingWith = cInfo
+        ? cInfo.competingPages.filter((cp) => cp.url !== normUrl)
+        : [];
+      const isCannibalized = competingWith.length > 0;
 
       if (isThin) thinCount++;
       if (isMissingTitle) missingTitle++;
@@ -622,12 +645,19 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
         is_missing_h1: isMissingH1,
         is_missing_meta: isMissingMeta,
         is_cannibalized: isCannibalized,
+        cannibalized_with: competingWith,
         existing_schema: p.existing_schema || null,
         generated_schema: p.generated_schema || null,
         markdown_content: p.markdown_content || "",
         crawled_at: p.crawled_at,
       };
     });
+
+    const entitiesList = Array.from(allEntitiesMap.values()).map((ent) => ({
+      ...ent,
+      pages_count: (mainEntityToUrls[ent.name] || []).length,
+      sample_urls: (mainEntityToUrls[ent.name] || []).slice(0, 5),
+    })).sort((a, b) => b.pages_count - a.pages_count);
 
     return {
       metrics: {
@@ -643,7 +673,7 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
         avgWordCount: pages.length > 0 ? Math.round(totalWords / pages.length) : 0,
       },
       pages: auditedPages,
-      entities: Array.from(allEntitiesMap.values()),
+      entities: entitiesList,
       cannibalizations,
     };
   } catch (err: any) {
