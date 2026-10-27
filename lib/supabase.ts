@@ -3,20 +3,56 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 let supabaseClient: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let url = (
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    ""
+  ).trim();
+
+  let key = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ""
+  ).trim();
+
+  // Limpiar comillas accidentales
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+
+  // Auto-corrección si se invirtieron la URL y la Key accidentalmente en Vercel
+  if (url.startsWith("eyJ") && (key.startsWith("http") || key.includes("supabase.co"))) {
+    const temp = url;
+    url = key;
+    key = temp;
+  }
+
+  // Asegurar protocolo https:// si se omitió
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    url = `https://${url}`;
+  }
 
   if (!url || !key) {
     return null;
   }
 
   if (!supabaseClient) {
-    supabaseClient = createClient(url, key, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    try {
+      supabaseClient = createClient(url, key, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+    } catch (err: any) {
+      console.error("Error inicializando Supabase client:", err);
+      return null;
+    }
   }
 
   return supabaseClient;
