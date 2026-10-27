@@ -328,17 +328,28 @@ export async function getEntityGraphByNamespace(namespace: string) {
 
     const pageIds = pages.map((p) => p.id);
 
-    // 2. Obtener las relaciones page_entities
-    const { data: pageEntities } = await supabase
-      .from("page_entities")
-      .select("page_id, entity_id, role, confidence, entities(*)")
-      .in("page_id", pageIds);
+    // 2. Obtener las relaciones page_entities y enlaces internos en bloques de 50
+    const BATCH_SIZE = 50;
+    const chunks: string[][] = [];
+    for (let i = 0; i < pageIds.length; i += BATCH_SIZE) {
+      chunks.push(pageIds.slice(i, i + BATCH_SIZE));
+    }
 
-    // 3. Obtener los enlaces internos entre páginas
-    const { data: internalLinks } = await supabase
-      .from("internal_links")
-      .select("source_page_id, target_url, anchor_text")
-      .in("source_page_id", pageIds);
+    const batchResults = await Promise.all(
+      chunks.map((chunk) =>
+        Promise.all([
+          supabase.from("page_entities").select("page_id, entity_id, role, confidence, entities(*)").in("page_id", chunk).limit(2000),
+          supabase.from("internal_links").select("source_page_id, target_url, anchor_text").in("source_page_id", chunk).limit(2000),
+        ])
+      )
+    );
+
+    const pageEntities: any[] = [];
+    const internalLinks: any[] = [];
+    for (const [peRes, lRes] of batchResults) {
+      if (peRes.data) pageEntities.push(...peRes.data);
+      if (lRes.data) internalLinks.push(...lRes.data);
+    }
 
     return {
       pages,
@@ -452,11 +463,28 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
       };
     }
 
-    // 2. Obtener enlaces y entidades en paralelo
-    const [{ data: internalLinks }, { data: pageEntities }] = await Promise.all([
-      supabase.from("internal_links").select("source_page_id, target_url, anchor_text").in("source_page_id", pageIds),
-      supabase.from("page_entities").select("page_id, role, confidence, entities(*)").in("page_id", pageIds),
-    ]);
+    // 2. Obtener enlaces y entidades en paralelo dividiendo en bloques de 50 para evitar sobrepasar límites de PostgREST
+    const BATCH_SIZE = 50;
+    const chunks: string[][] = [];
+    for (let i = 0; i < pageIds.length; i += BATCH_SIZE) {
+      chunks.push(pageIds.slice(i, i + BATCH_SIZE));
+    }
+
+    const batchResults = await Promise.all(
+      chunks.map((chunk) =>
+        Promise.all([
+          supabase.from("internal_links").select("source_page_id, target_url, anchor_text").in("source_page_id", chunk).limit(2000),
+          supabase.from("page_entities").select("page_id, role, confidence, entities(*)").in("page_id", chunk).limit(2000),
+        ])
+      )
+    );
+
+    const internalLinks: any[] = [];
+    const pageEntities: any[] = [];
+    for (const [lRes, peRes] of batchResults) {
+      if (lRes.data) internalLinks.push(...lRes.data);
+      if (peRes.data) pageEntities.push(...peRes.data);
+    }
 
     // Mapa de Inlinks y Outlinks
     const inlinksCountByUrl: Record<string, number> = {};
@@ -592,4 +620,151 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
     console.error("Error en getSeoAuditDataByNamespace:", err);
     return null;
   }
+}
+
+/**
+ * Extrae enlaces internos y entidades temáticas de las páginas existentes en Supabase
+ * y las almacena en internal_links, entities y page_entities.
+ */
+export async function populateLinksAndEntitiesForPages(namespace: string) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { linksCount: 0, entitiesCount: 0 };
+
+  const { data: pages } = await supabase
+    .from("pages")
+    .select("id, url, title, h1, markdown_content")
+    .ilike("namespace", namespace);
+
+  if (!pages || pages.length === 0) return { linksCount: 0, entitiesCount: 0 };
+
+  let domain = "";
+  try {
+    domain = new URL(pages[0].url).hostname.replace(/^www\./, "");
+  } catch {}
+
+  const linksToInsert: { source_page_id: string; target_url: string; anchor_text: string }[] = [];
+  const entitiesMap = new Map<string, any>();
+  const pageEntitiesToInsert: { pageId: string; entityName: string; role: string }[] = [];
+
+  const STOP_WORDS = new Set([
+    "de", "la", "el", "en", "y", "a", "los", "del", "las", "un", "por", "con", "no", "una",
+    "para", "es", "al", "lo", "como", "mas", "o", "pero", "sus", "le", "ha", "me", "si", "sin",
+    "sobre", "este", "ya", "entre", "cuando", "todo", "esta", "ser", "son", "dos", "tambien",
+    "fue", "era", "muy", "hasta", "desde", "mi", "porque", "cada", "que", "cual", "cuál", "cómo",
+    "guia", "guía", "vs", "ideas", "paso", "que", "qué", "donde", "dónde", "blog", "saber"
+  ]);
+
+  for (const page of pages) {
+    const content = page.markdown_content || "";
+    const linkMatches = [...content.matchAll(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+|\/[^\s\)]+)\)/g)];
+    const seenTargets = new Set<string>();
+
+    for (const match of linkMatches) {
+      const rawAnchor = match[1];
+      let href = match[2].trim();
+
+      if (rawAnchor.startsWith("!") || href.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf|css|js)$/i)) {
+        continue;
+      }
+
+      if (href.startsWith("/")) {
+        href = `https://${domain}${href}`;
+      }
+
+      try {
+        const u = new URL(href);
+        const linkDomain = u.hostname.replace(/^www\./, "");
+        if (domain && linkDomain !== domain && !linkDomain.includes(domain.split(".")[0])) {
+          continue;
+        }
+        u.search = "";
+        u.hash = "";
+        href = u.toString().replace(/\/$/, "");
+      } catch {
+        continue;
+      }
+
+      if (seenTargets.has(href)) continue;
+      seenTargets.add(href);
+
+      const anchor = rawAnchor.replace(/[*_#`\[\]]/g, "").trim();
+      if (anchor.length > 1 && anchor.length < 150) {
+        linksToInsert.push({
+          source_page_id: page.id,
+          target_url: href,
+          anchor_text: anchor,
+        });
+      }
+    }
+
+    const candidate = (page.h1 || page.title || "").replace(/[¿?¡!:]/g, "").trim();
+    let mainTopic = "";
+    const lower = candidate.toLowerCase();
+    if (lower.includes("buro de credito") || lower.includes("buró de crédito")) mainTopic = "Buró de Crédito";
+    else if (lower.includes("prestamo") || lower.includes("préstamo") || lower.includes("credito") || lower.includes("crédito")) mainTopic = "Préstamos y Créditos";
+    else if (lower.includes("fintech")) mainTopic = "Fintech";
+    else if (lower.includes("afore")) mainTopic = "AFORE";
+    else if (lower.includes("transferencia") || lower.includes("efectivo")) mainTopic = "Transferencias Bancarias";
+    else if (lower.includes("presupuesto") || lower.includes("ahorro") || lower.includes("finanzas")) mainTopic = "Gestión Financiera";
+    else if (lower.includes("semana santa")) mainTopic = "Semana Santa";
+    else if (lower.includes("dia de muertos") || lower.includes("día de muertos")) mainTopic = "Día de Muertos";
+    else if (lower.includes("renta") || lower.includes("alquiler")) mainTopic = "Vivienda y Renta";
+    else if (lower.includes("electrodomestico") || lower.includes("electrodoméstico") || lower.includes("television") || lower.includes("televisión")) mainTopic = "Compras del Hogar";
+    else if (lower.includes("mundial") || lower.includes("futbol") || lower.includes("fútbol")) mainTopic = "Copa Mundial FIFA";
+    else {
+      const words = candidate.split(/\s+/).filter((w: string) => !STOP_WORDS.has(w.toLowerCase()) && w.length > 2);
+      if (words.length >= 2) {
+        mainTopic = `${words[0]} ${words[1]}`;
+      } else if (words.length === 1) {
+        mainTopic = words[0];
+      }
+    }
+
+    if (mainTopic && mainTopic.length > 2) {
+      if (!entitiesMap.has(mainTopic)) {
+        entitiesMap.set(mainTopic, {
+          name: mainTopic,
+          schema_type: "Thing",
+          description: `Entidad temática extraída: ${mainTopic}`,
+        });
+      }
+      pageEntitiesToInsert.push({
+        pageId: page.id,
+        entityName: mainTopic,
+        role: "main_entity",
+      });
+    }
+  }
+
+  // 1. Guardar entidades
+  const entitiesList = Array.from(entitiesMap.values());
+  const { data: savedEntities } = await supabase
+    .from("entities")
+    .upsert(entitiesList, { onConflict: "name" })
+    .select("id, name");
+
+  const entityNameToId = new Map(savedEntities?.map((e) => [e.name, e.id]));
+
+  // 2. Guardar page_entities
+  const pageEntitiesPayload = pageEntitiesToInsert
+    .map((pe) => ({
+      page_id: pe.pageId,
+      entity_id: entityNameToId.get(pe.entityName),
+      role: pe.role,
+      confidence: 0.95,
+    }))
+    .filter((pe) => pe.entity_id);
+
+  for (let i = 0; i < pageEntitiesPayload.length; i += 100) {
+    const chunk = pageEntitiesPayload.slice(i, i + 100);
+    await supabase.from("page_entities").upsert(chunk, { onConflict: "page_id,entity_id,role" });
+  }
+
+  // 3. Guardar internal_links en bloques de 200
+  for (let i = 0; i < linksToInsert.length; i += 200) {
+    const chunk = linksToInsert.slice(i, i + 200);
+    await supabase.from("internal_links").insert(chunk);
+  }
+
+  return { linksCount: linksToInsert.length, entitiesCount: entitiesMap.size };
 }

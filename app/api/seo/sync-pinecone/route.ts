@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 import { getPineconeIndex, resolvePineconeNamespace } from "@/lib/pinecone";
-import { getSupabaseClient, savePagesBatchToSupabase, PageRecord } from "@/lib/supabase";
+import { getSupabaseClient, savePagesBatchToSupabase, populateLinksAndEntitiesForPages, PageRecord } from "@/lib/supabase";
 import { toSlug } from "@/lib/crawler";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +122,13 @@ ${text}`;
         },
         { status: 500 }
       );
+    }
+
+    // Extraer y poblar enlaces internos y entidades del grafo
+    try {
+      await populateLinksAndEntitiesForPages(resolvedNs);
+    } catch (graphErr: any) {
+      console.warn("Advertencia poblando grafo relacional:", graphErr.message);
     }
 
     return NextResponse.json({

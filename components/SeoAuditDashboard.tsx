@@ -18,6 +18,13 @@ import {
   ArrowLeft,
   ShieldCheck,
   Globe,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 interface SeoAuditDashboardProps {
@@ -88,6 +95,17 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
     fetchAudit();
   }, [namespace]);
 
+  // Paginación y Ordenamiento
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortField, setSortField] = useState<"inlinks" | "outlinks" | "words" | "title" | "url">("inlinks");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Reset de página cuando cambian filtros o búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilter, pageSize]);
+
   // Filtrado de páginas
   const pages: any[] = data?.pages || [];
   const metrics = data?.metrics || {
@@ -120,6 +138,46 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
 
     return true;
   });
+
+  // Ordenamiento
+  const sortedPages = [...filteredPages].sort((a, b) => {
+    let aVal: any = 0;
+    let bVal: any = 0;
+    if (sortField === "inlinks") {
+      aVal = a.inlinks_count || 0;
+      bVal = b.inlinks_count || 0;
+    } else if (sortField === "outlinks") {
+      aVal = a.outlinks_count || 0;
+      bVal = b.outlinks_count || 0;
+    } else if (sortField === "words") {
+      aVal = a.word_count || 0;
+      bVal = b.word_count || 0;
+    } else if (sortField === "title") {
+      aVal = (a.title || "").toLowerCase();
+      bVal = (b.title || "").toLowerCase();
+    } else if (sortField === "url") {
+      aVal = a.url.toLowerCase();
+      bVal = b.url.toLowerCase();
+    }
+
+    if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalPagesCount = Math.max(1, Math.ceil(sortedPages.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, sortedPages.length);
+  const paginatedPages = sortedPages.slice(startIndex, endIndex);
+
+  const handleSort = (field: "inlinks" | "outlinks" | "words" | "title" | "url") => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder(field === "inlinks" || field === "words" || field === "outlinks" ? "desc" : "asc");
+    }
+  };
 
   // Copiar al portapapeles
   const handleCopy = (text: string, type: "markdown" | "schema") => {
@@ -446,125 +504,250 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
             <p className="text-xs text-slate-400">Prueba cambiando de filtro o busca otro término.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4">Página & Slug</th>
-                  <th className="py-3 px-4">Title & H1</th>
-                  <th className="py-3 px-3 text-center">Inlinks</th>
-                  <th className="py-3 px-3 text-center">Outlinks</th>
-                  <th className="py-3 px-3 text-center">Palabras</th>
-                  <th className="py-3 px-4">Entidad Principal</th>
-                  <th className="py-3 px-4 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredPages.map((page) => (
-                  <tr key={page.id} className="hover:bg-slate-50/80 transition-colors group">
-                    {/* URL & Slug */}
-                    <td className="py-3 px-4 max-w-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[11px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/50">
-                          {page.slug}
-                        </span>
-                        {page.is_orphan && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold" title="Página huérfana: 0 enlaces internos apuntan a ella">
-                            Huérfana
-                          </span>
-                        )}
-                        {page.is_cannibalized && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-bold" title="Canibalización: comparte entidad con otra página">
-                            Canibalizada
-                          </span>
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider select-none">
+                    <th
+                      onClick={() => handleSort("url")}
+                      className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Página & Slug</span>
+                        {sortField === "url" ? (
+                          sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
                         )}
                       </div>
-                      <a
-                        href={page.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1 text-[11px] mt-0.5 truncate"
-                        title={page.url}
-                      >
-                        <span className="truncate">{page.url}</span>
-                        <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
-                      </a>
-                    </td>
-
-                    {/* Title & H1 */}
-                    <td className="py-3 px-4 max-w-sm">
-                      <div className="font-semibold text-slate-800 truncate" title={page.title}>
-                        {page.title || <span className="text-rose-500 italic">Sin etiqueta Title</span>}
+                    </th>
+                    <th
+                      onClick={() => handleSort("title")}
+                      className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>Title & H1</span>
+                        {sortField === "title" ? (
+                          sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                        )}
                       </div>
-                      <div className="text-slate-500 text-[11px] truncate flex items-center gap-1" title={page.h1}>
-                        <span className="font-mono text-[10px] text-slate-400">H1:</span>
-                        <span>{page.h1 || <span className="text-amber-500 italic">Sin H1</span>}</span>
+                    </th>
+                    <th
+                      onClick={() => handleSort("inlinks")}
+                      className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Inlinks</span>
+                        {sortField === "inlinks" ? (
+                          sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                        )}
                       </div>
-                    </td>
-
-                    {/* Inlinks */}
-                    <td className="py-3 px-3 text-center">
-                      <span
-                        className={`inline-block font-mono font-bold px-2 py-0.5 rounded ${
-                          page.inlinks_count === 0
-                            ? "bg-amber-100 text-amber-900"
-                            : "bg-blue-50 text-blue-800 border border-blue-200/60"
-                        }`}
-                        title={`${page.inlinks_count} páginas internas enlazan a esta URL`}
-                      >
-                        {page.inlinks_count}
-                      </span>
-                    </td>
-
-                    {/* Outlinks */}
-                    <td className="py-3 px-3 text-center font-mono text-slate-600">{page.outlinks_count}</td>
-
-                    {/* Palabras */}
-                    <td className="py-3 px-3 text-center">
-                      <span
-                        className={`font-mono ${
-                          page.is_thin ? "text-amber-700 font-bold" : "text-slate-600"
-                        }`}
-                      >
-                        {page.word_count || 0}
-                      </span>
-                    </td>
-
-                    {/* Entidad Principal */}
-                    <td className="py-3 px-4 max-w-xs">
-                      {page.main_entity ? (
-                        <div className="space-y-0.5">
-                          <div className="font-semibold text-slate-900 flex items-center gap-1">
-                            <span className="truncate">{page.main_entity.name}</span>
-                            {page.main_entity.kg_mid && (
-                              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1 rounded font-mono font-bold" title="Reconciliada con Google Knowledge Graph">
-                                Google KG
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            {page.main_entity.schema_type}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic">No clasificada</span>
-                      )}
-                    </td>
-
-                    {/* Acción: Inspeccionar */}
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedPage(page)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>Inspeccionar</span>
-                      </button>
-                    </td>
+                    </th>
+                    <th
+                      onClick={() => handleSort("outlinks")}
+                      className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Outlinks</span>
+                        {sortField === "outlinks" ? (
+                          sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("words")}
+                      className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Palabras</span>
+                        {sortField === "words" ? (
+                          sortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3 text-indigo-600" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-3 px-4">Entidad Principal</th>
+                    <th className="py-3 px-4 text-right">Acción</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedPages.map((page) => (
+                    <tr key={page.id} className="hover:bg-slate-50/80 transition-colors group">
+                      {/* URL & Slug */}
+                      <td className="py-3 px-4 max-w-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-[11px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/50">
+                            {page.slug}
+                          </span>
+                          {page.is_orphan && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold" title="Página huérfana: 0 enlaces internos apuntan a ella">
+                              Huérfana
+                            </span>
+                          )}
+                          {page.is_cannibalized && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-bold" title="Canibalización: comparte entidad con otra página">
+                              Canibalizada
+                            </span>
+                          )}
+                        </div>
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-slate-500 hover:text-blue-600 hover:underline flex items-center gap-1 text-[11px] mt-0.5 truncate"
+                          title={page.url}
+                        >
+                          <span className="truncate">{page.url}</span>
+                          <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
+                        </a>
+                      </td>
+
+                      {/* Title & H1 */}
+                      <td className="py-3 px-4 max-w-sm">
+                        <div className="font-semibold text-slate-800 truncate" title={page.title}>
+                          {page.title || <span className="text-rose-500 italic">Sin etiqueta Title</span>}
+                        </div>
+                        <div className="text-slate-500 text-[11px] truncate flex items-center gap-1" title={page.h1}>
+                          <span className="font-mono text-[10px] text-slate-400">H1:</span>
+                          <span>{page.h1 || <span className="text-amber-500 italic">Sin H1</span>}</span>
+                        </div>
+                      </td>
+
+                      {/* Inlinks */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`inline-block font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                            page.inlinks_count === 0
+                              ? "bg-amber-100 text-amber-900"
+                              : "bg-blue-50 text-blue-800 border border-blue-200/60"
+                          }`}
+                          title={`${page.inlinks_count} enlaces internos entrantes hacia esta URL`}
+                        >
+                          {page.inlinks_count}
+                        </span>
+                      </td>
+
+                      {/* Outlinks */}
+                      <td className="py-3 px-3 text-center font-mono text-slate-600 text-xs">{page.outlinks_count}</td>
+
+                      {/* Palabras */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`font-mono text-xs ${
+                            page.is_thin ? "text-amber-700 font-bold" : "text-slate-600"
+                          }`}
+                        >
+                          {page.word_count || 0}
+                        </span>
+                      </td>
+
+                      {/* Entidad Principal */}
+                      <td className="py-3 px-4 max-w-xs">
+                        {page.main_entity ? (
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-slate-900 flex items-center gap-1">
+                              <span className="truncate text-xs">{page.main_entity.name}</span>
+                              {page.main_entity.kg_mid && (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1 rounded font-mono font-bold shrink-0" title="Reconciliada con Google Knowledge Graph">
+                                  Google KG
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              {page.main_entity.schema_type}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">No clasificada</span>
+                        )}
+                      </td>
+
+                      {/* Acción: Inspeccionar */}
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => setSelectedPage(page)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Inspeccionar</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Barra de Paginación Organizada */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
+              <div className="flex items-center gap-4">
+                <span>
+                  Mostrando <strong className="text-slate-900">{startIndex + 1}</strong> a{" "}
+                  <strong className="text-slate-900">{endIndex}</strong> de{" "}
+                  <strong className="text-slate-900">{sortedPages.length}</strong> páginas
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Por página:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Primera página"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Anterior</span>
+                </button>
+
+                <div className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800">
+                  Página {currentPage} de {totalPagesCount}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesCount, p + 1))}
+                  disabled={currentPage === totalPagesCount}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  <span className="hidden sm:inline">Siguiente</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPagesCount)}
+                  disabled={currentPage === totalPagesCount}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Última página"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
