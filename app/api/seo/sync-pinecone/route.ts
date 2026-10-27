@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 import { getPineconeIndex, resolvePineconeNamespace } from "@/lib/pinecone";
-import { savePageToSupabase } from "@/lib/supabase";
+import { getSupabaseClient, savePagesBatchToSupabase, PageRecord } from "@/lib/supabase";
 import { toSlug } from "@/lib/crawler";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,18 @@ export async function POST(req: NextRequest) {
     const user = await getScrapioUserOrApiKey(req);
     if (!user) {
       return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Supabase no está configurado en las variables de entorno de este servidor. Asegúrate de añadir SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en el panel de Vercel (Settings -> Environment Variables).",
+        },
+        { status: 500 }
+      );
     }
 
     const body = await req.json();
@@ -65,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`📦 Reconstruyendo ${urlMap.size} páginas desde Pinecone hacia Supabase para '${resolvedNs}'...`);
 
-    let savedCount = 0;
+    const pagesToInsert: PageRecord[] = [];
 
     for (const [url, info] of urlMap.entries()) {
       const slug = toSlug(url);
@@ -86,8 +98,8 @@ crawled_at: "${info.createdAt || new Date().toISOString()}"
 
 ${text}`;
 
-      await savePageToSupabase({
-        namespace: rawNamespace,
+      pagesToInsert.push({
+        namespace: resolvedNs, // Usar la forma canónica del namespace
         url,
         slug,
         title: info.h1,
@@ -96,9 +108,20 @@ ${text}`;
         language: "es",
         word_count: wordCount,
         markdown_content: fullMarkdown,
+        crawled_at: info.createdAt || new Date().toISOString(),
       });
+    }
 
-      savedCount++;
+    const savedCount = await savePagesBatchToSupabase(pagesToInsert);
+
+    if (savedCount === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No se pudieron insertar páginas en Supabase. Verifica los permisos de la base de datos.",
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -107,7 +130,7 @@ ${text}`;
       resolvedNamespace: resolvedNs,
       totalVectors: queryResponse.matches.length,
       pagesMigrated: savedCount,
-      message: `¡Éxito! Se migraron ${savedCount} páginas desde Pinecone hacia Supabase sin necesidad de re-escanear.`,
+      message: `¡Éxito! Se sincronizaron ${savedCount} páginas de '${resolvedNs}' desde Pinecone hacia Supabase en alta velocidad.`,
     });
   } catch (err: any) {
     console.error("Error en sync-pinecone:", err);

@@ -72,10 +72,10 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
     setError(null);
     try {
       const res = await fetch(`/api/seo/audit?namespace=${encodeURIComponent(namespace)}`);
-      if (!res.ok) {
-        throw new Error(`Error HTTP ${res.status}`);
-      }
       const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || `Error HTTP ${res.status}`);
+      }
       setData(json);
     } catch (err: any) {
       setError(err.message || "Error al cargar la auditoría");

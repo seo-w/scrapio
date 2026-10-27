@@ -117,6 +117,68 @@ export async function savePageToSupabase(page: PageRecord) {
 }
 
 /**
+ * Guarda o actualiza un lote de páginas en Supabase en bloques de 50
+ */
+export async function savePagesBatchToSupabase(pages: PageRecord[]): Promise<number> {
+  const supabase = getSupabaseClient();
+  if (!supabase || pages.length === 0) return 0;
+
+  const BATCH_SIZE = 50;
+  let savedCount = 0;
+
+  for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+    const chunk = pages.slice(i, i + BATCH_SIZE);
+    const payloads = chunk.map((page) => {
+      const payload: Record<string, any> = {
+        namespace: page.namespace,
+        url: page.url,
+        title: page.title || "",
+        h1: page.h1 || "",
+        meta_description: page.meta_description || "",
+        canonical: page.canonical || page.url,
+        markdown_content: page.markdown_content || "",
+        crawled_at: page.crawled_at || new Date().toISOString(),
+      };
+      if (page.slug) payload.slug = page.slug;
+      if (page.language) payload.language = page.language;
+      if (page.word_count !== undefined) payload.word_count = page.word_count;
+      if (page.existing_schema) payload.existing_schema = page.existing_schema;
+      if (page.generated_schema) payload.generated_schema = page.generated_schema;
+      return payload;
+    });
+
+    const { data, error } = await supabase
+      .from("pages")
+      .upsert(payloads, { onConflict: "url" })
+      .select("id");
+
+    if (error) {
+      console.warn(`⚠️ Error en lote de páginas a Supabase:`, error.message);
+      if (error.message?.toLowerCase().includes("column")) {
+        const basicPayloads = chunk.map((p) => ({
+          namespace: p.namespace,
+          url: p.url,
+          title: p.title || "",
+          h1: p.h1 || "",
+          meta_description: p.meta_description || "",
+          canonical: p.canonical || p.url,
+          markdown_content: p.markdown_content || "",
+          crawled_at: p.crawled_at || new Date().toISOString(),
+        }));
+        const retry = await supabase.from("pages").upsert(basicPayloads, { onConflict: "url" }).select("id");
+        if (retry.data) savedCount += retry.data.length;
+      }
+    } else if (data) {
+      savedCount += data.length;
+    } else {
+      savedCount += chunk.length;
+    }
+  }
+
+  return savedCount;
+}
+
+/**
  * Guarda los enlaces internos asociados a una página
  */
 export async function saveInternalLinksToSupabase(
@@ -218,11 +280,11 @@ export async function getEntityGraphByNamespace(namespace: string) {
   if (!supabase) return null;
 
   try {
-    // 1. Obtener todas las páginas del namespace
+    // 1. Obtener todas las páginas del namespace (búsqueda insensible a mayúsculas/minúsculas)
     const { data: pages, error: pError } = await supabase
       .from("pages")
       .select("id, url, title, h1, canonical, meta_description, crawled_at")
-      .eq("namespace", namespace);
+      .ilike("namespace", namespace);
 
     if (pError || !pages || pages.length === 0) {
       return { pages: [], entities: [], relations: [], internalLinks: [] };
@@ -325,11 +387,11 @@ export async function getSeoAuditDataByNamespace(namespace: string) {
   if (!supabase) return null;
 
   try {
-    // 1. Obtener todas las páginas
+    // 1. Obtener todas las páginas (búsqueda insensible a mayúsculas/minúsculas)
     const { data: pages, error: pError } = await supabase
       .from("pages")
       .select("*")
-      .eq("namespace", namespace)
+      .ilike("namespace", namespace)
       .order("crawled_at", { ascending: false });
 
     if (pError || !pages) return null;

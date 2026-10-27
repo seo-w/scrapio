@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
-import { getSeoAuditDataByNamespace } from "@/lib/supabase";
+import { getSeoAuditDataByNamespace, getSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +21,18 @@ export async function GET(req: NextRequest) {
 
     if (!isNamespaceAllowed(user, rawNamespace)) {
       return NextResponse.json({ error: `No tienes permisos para ver el namespace '${rawNamespace}'.` }, { status: 403 });
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return NextResponse.json(
+        {
+          error:
+            "Supabase no está conectado en el servidor. Asegúrate de agregar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en las variables de entorno de Vercel.",
+          notConfigured: true,
+        },
+        { status: 503 }
+      );
     }
 
     const auditData = await getSeoAuditDataByNamespace(rawNamespace);
