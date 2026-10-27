@@ -1026,12 +1026,19 @@ export default function Home() {
             </div>
             {/* Active Link: Consulta */}
             <button
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#E0E7FF] text-[#2563EB] font-semibold text-base shadow-2xs cursor-pointer"
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                setActiveWorkspaceView("chat");
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-base transition-colors cursor-pointer ${
+                activeWorkspaceView === "chat"
+                  ? "bg-[#E0E7FF] text-[#2563EB] shadow-2xs"
+                  : "text-slate-700 hover:bg-slate-200/50"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <MessageSquare className="w-5 h-5 text-[#2563EB]" />
-                <span>Consulta</span>
+                <MessageSquare className={`w-5 h-5 ${activeWorkspaceView === "chat" ? "text-[#2563EB]" : "text-slate-500"}`} />
+                <span>Consulta (Chat)</span>
               </div>
             </button>
 

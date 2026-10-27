@@ -41,6 +41,30 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   const [activeDetailTab, setActiveDetailTab] = useState<"markdown" | "schema" | "links">("markdown");
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [copiedSchema, setCopiedSchema] = useState(false);
+  const [isSyncingPinecone, setIsSyncingPinecone] = useState(false);
+
+  const handleSyncFromPinecone = async () => {
+    if (!namespace) return;
+    setIsSyncingPinecone(true);
+    try {
+      const res = await fetch("/api/seo/sync-pinecone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ namespace }),
+      });
+      const resJson = await res.json();
+      if (res.ok && resJson.success) {
+        alert(resJson.message);
+        fetchAudit();
+      } else {
+        alert(resJson.message || resJson.error || "No se pudo sincronizar.");
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSyncingPinecone(false);
+    }
+  };
 
   const fetchAudit = async () => {
     if (!namespace) return;
@@ -191,6 +215,16 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {metrics.totalPages === 0 && (
+            <button
+              onClick={handleSyncFromPinecone}
+              disabled={isSyncingPinecone}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingPinecone ? "animate-spin" : ""}`} />
+              <span>{isSyncingPinecone ? "Migrando..." : "Poblar desde Pinecone"}</span>
+            </button>
+          )}
           <button
             onClick={fetchAudit}
             disabled={isLoading}
@@ -380,6 +414,30 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
             <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
             <p className="text-sm font-bold text-slate-800">No se pudo cargar la auditoría</p>
             <p className="text-xs text-slate-500 max-w-md mx-auto">{error}</p>
+          </div>
+        ) : metrics.totalPages === 0 ? (
+          <div className="py-16 px-4 text-center space-y-4 max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+              <Layers className="w-7 h-7" />
+            </div>
+            <div>
+              <h4 className="text-base sm:text-lg font-bold text-slate-900">
+                Este cliente aún no tiene páginas en Supabase
+              </h4>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
+                Tus vectores de este cliente ya están en Pinecone. Puedes poblarlos directamente en Supabase con 1 solo clic sin tener que volver a rastrear el sitio web.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={handleSyncFromPinecone}
+                disabled={isSyncingPinecone}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncingPinecone ? "animate-spin" : ""}`} />
+                <span>{isSyncingPinecone ? "Migrando datos..." : "📥 Poblar Supabase desde Pinecone"}</span>
+              </button>
+            </div>
           </div>
         ) : filteredPages.length === 0 ? (
           <div className="py-16 text-center space-y-2">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding, generateRAGResponse, ContextChunk } from "@/lib/ai";
 import { queryPinecone, resolvePineconeNamespace, getIndexStats } from "@/lib/pinecone";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
+import { getSeoAuditDataByNamespace, getSupabaseClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -106,6 +107,40 @@ const MCP_TOOLS = [
         },
       },
       required: ["namespace"],
+    },
+  },
+  {
+    name: "get_seo_audit",
+    description:
+      "Obtiene la auditoría SEO técnica y arquitectura web desde Supabase: páginas huérfanas, canibalizaciones de palabras clave, enlaces internos y conteo de palabras.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: {
+          type: "string",
+          description: "Nombre del cliente o sitio web a auditar",
+        },
+      },
+      required: ["namespace"],
+    },
+  },
+  {
+    name: "get_page_markdown",
+    description:
+      "Obtiene el contenido íntegro en Markdown de una URL específica desde Supabase con su Frontmatter YAML y Wikilinks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: {
+          type: "string",
+          description: "Nombre del cliente o sitio web",
+        },
+        url: {
+          type: "string",
+          description: "URL exacta de la página a consultar",
+        },
+      },
+      required: ["namespace", "url"],
     },
   },
 ];
@@ -306,6 +341,62 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (toolName === "get_seo_audit") {
+        const rawNamespace = (args.namespace || "").trim();
+        if (!rawNamespace) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: El parámetro 'namespace' es obligatorio." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Error: No tienes permisos sobre '${rawNamespace}'.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const audit = await getSeoAuditDataByNamespace(rawNamespace);
+        return NextResponse.json(
+          { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(audit, null, 2) }] } },
+          { headers: CORS_HEADERS }
+        );
+      }
+
+      if (toolName === "get_page_markdown") {
+        const rawNamespace = (args.namespace || "").trim();
+        const url = (args.url || "").trim();
+        if (!rawNamespace || !url) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: 'namespace' y 'url' son obligatorios." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Error: No tienes permisos sobre '${rawNamespace}'.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: Supabase no está configurado." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const { data: page } = await supabase.from("pages").select("*").eq("namespace", rawNamespace).eq("url", url).single();
+        if (!page) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `No se encontró la URL '${url}' en Supabase.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        return NextResponse.json(
+          { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: page.markdown_content || "# Sin contenido" }] } },
+          { headers: CORS_HEADERS }
+        );
+      }
+
       if (toolName === "get_site_entities" || toolName === "scrapio_get_entities") {
         const rawNamespace = (args.namespace || "").trim();
         if (!rawNamespace) {
@@ -388,6 +479,62 @@ export async function POST(req: NextRequest) {
               content: [{ type: "text", text: fullText }],
             },
           },
+          { headers: CORS_HEADERS }
+        );
+      }
+
+      if (toolName === "get_seo_audit") {
+        const rawNamespace = (args.namespace || "").trim();
+        if (!rawNamespace) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: El parámetro 'namespace' es obligatorio." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Error: No tienes permisos sobre '${rawNamespace}'.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const audit = await getSeoAuditDataByNamespace(rawNamespace);
+        return NextResponse.json(
+          { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(audit, null, 2) }] } },
+          { headers: CORS_HEADERS }
+        );
+      }
+
+      if (toolName === "get_page_markdown") {
+        const rawNamespace = (args.namespace || "").trim();
+        const url = (args.url || "").trim();
+        if (!rawNamespace || !url) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: 'namespace' y 'url' son obligatorios." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        if (!isNamespaceAllowed(authUser, rawNamespace)) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `Error: No tienes permisos sobre '${rawNamespace}'.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: Supabase no está configurado." }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        const { data: page } = await supabase.from("pages").select("*").eq("namespace", rawNamespace).eq("url", url).single();
+        if (!page) {
+          return NextResponse.json(
+            { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: `No se encontró la URL '${url}' en Supabase.` }], isError: true } },
+            { headers: CORS_HEADERS }
+          );
+        }
+        return NextResponse.json(
+          { jsonrpc: "2.0", id, result: { content: [{ type: "text", text: page.markdown_content || "# Sin contenido" }] } },
           { headers: CORS_HEADERS }
         );
       }
