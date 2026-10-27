@@ -1096,9 +1096,6 @@ export default function Home() {
                 <Network className="w-5 h-5 text-indigo-600" />
                 <span>Auditoría & SEO</span>
               </div>
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
-                Screaming Frog
-              </span>
             </button>
 
             {/* Integraciones */}

@@ -20,7 +20,7 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 
 ## 📝 Historial de Cambios
 
-### 2026-10-26 — Feat: Motor de Auditoría SEO y Grafo de Conocimiento (Supabase + Pinecone), Arquitectura Screaming Frog, Detección de Páginas Huérfanas y Herramientas MCP Avanzadas
+### 2026-10-26 — Feat: Motor de Auditoría SEO y Grafo de Conocimiento (Supabase + Pinecone), Arquitectura Web Técnica, Detección de Páginas Huérfanas y Herramientas MCP Avanzadas
 
 **Problema resuelto:**
 1. **Pérdida de la visión holística del sitio:** Pinecone solo almacenaba fragmentos vectorizados de ~500 tokens (`text_chunk`). Aunque esto es ideal para RAG semántico, impedía conocer la arquitectura de enlazado interno, auditar páginas huérfanas, detectar canibalizaciones de H1s/títulos o evaluar el conteo de palabras por página.
@@ -32,7 +32,7 @@ Scrapio es una plataforma de **Retrieval-Augmented Generation (RAG) Serverless y
 1. **Arquitectura Híbrida de Doble Motor (Pinecone + Supabase PostgreSQL):**
    * **Pinecone (Vector DB):** Continúa como motor ultrarrápido para RAG, embeddings (768d) y búsqueda semántica con citas de fuentes.
    * **Supabase (PostgreSQL Relacional):** Almacena las páginas completas en Markdown, metadatos enriquecidos (slug, H1, idioma, word count, YAML frontmatter), relaciones de enlaces internos (`internal_links`) y entidades del grafo (`entities`, `page_entities`).
-2. **Pantalla de Auditoría SEO & Arquitectura Web (Estilo Screaming Frog):**
+2. **Pantalla de Auditoría SEO & Arquitectura Web:**
    * **KPIs de Salud SEO en Tiempo Real:** Total de páginas, Enlaces internos contextuales, Entidades KG identificadas, Páginas huérfanas (0 inlinks entrantes), Alertas de canibalización y Contenido pobre (*Thin Content* <300 palabras).
    * **Tabla Maestra de URLs:** Buscador en vivo, filtros rápidos por anomalía (huérfanas, canibalizaciones, sin H1, etc.) y exportador a CSV compatible con Excel.
    * **Drawer de Inspección Técnica Lateral:**

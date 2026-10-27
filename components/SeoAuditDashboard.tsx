@@ -403,9 +403,6 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900">Auditoría SEO & Arquitectura Web</h2>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
-                Screaming Frog Style
-              </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-500">
               Inventario de URLs, Wikilinks, Entidades y Marcado Schema.org en <strong className="text-slate-800">{namespace}</strong>
@@ -803,7 +800,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
             </div>
           </div>
 
-          {/* Tabla Maestra de URLs (Screaming Frog Style) */}
+          {/* Tabla Maestra de URLs */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             {isLoading ? (
               <div className="py-16 text-center space-y-3">

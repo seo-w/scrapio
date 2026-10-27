@@ -457,7 +457,7 @@ export function summarizeGraph(graph: any) {
 }
 
 /**
- * Genera la auditoría SEO técnica y relacional completa para un namespace (Estilo Screaming Frog)
+ * Genera la auditoría SEO técnica y relacional completa para un namespace
  */
 export async function getSeoAuditDataByNamespace(namespace: string) {
   const supabase = getSupabaseClient();
