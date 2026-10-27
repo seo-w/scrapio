@@ -50,11 +50,21 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   const [sortField, setSortField] = useState<"inlinks" | "outlinks" | "words" | "title" | "url">("inlinks");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // 2. Estados de Canibalizaciones (Filtros y Paginación)
+  // 2. Estados de Canibalizaciones (Filtros, Paginación y Orden)
   const [cannibalizationSearchQuery, setCannibalizationSearchQuery] = useState("");
   const [cannibalizationFilter, setCannibalizationFilter] = useState<"all" | "severe" | "intent" | "critical">("all");
   const [cannibalizationPage, setCannibalizationPage] = useState(1);
   const [cannibalizationPageSize, setCannibalizationPageSize] = useState(5);
+  const [cannibalizationSortField, setCannibalizationSortField] = useState<"urls" | "topic" | "inlinks">("urls");
+  const [cannibalizationSortOrder, setCannibalizationSortOrder] = useState<"asc" | "desc">("desc");
+  const [expandedCannibalizationTopics, setExpandedCannibalizationTopics] = useState<Record<string, boolean>>({});
+
+  const toggleCannibalizationTopic = (topic: string) => {
+    setExpandedCannibalizationTopics((prev) => ({
+      ...prev,
+      [topic]: !prev[topic],
+    }));
+  };
 
   // 3. Estados de Entidades (Filtros y Paginación)
   const [entitySearchQuery, setEntitySearchQuery] = useState("");
@@ -123,7 +133,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
 
   useEffect(() => {
     setCannibalizationPage(1);
-  }, [cannibalizationSearchQuery, cannibalizationFilter, cannibalizationPageSize]);
+  }, [cannibalizationSearchQuery, cannibalizationFilter, cannibalizationPageSize, cannibalizationSortField, cannibalizationSortOrder]);
 
   useEffect(() => {
     setEntityPage(1);
@@ -171,6 +181,17 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   });
 
   const sortedPages = [...filteredPages].sort((a, b) => {
+    // Si estamos filtrando por canibalizaciones y el orden es por inlinks (default),
+    // agrupamos las URLs por entidad temática para que las competidoras aparezcan juntas
+    if (activeFilter === "cannibalized" && sortField === "inlinks") {
+      const entA = (a.main_entity?.name || "").toLowerCase();
+      const entB = (b.main_entity?.name || "").toLowerCase();
+      if (entA !== entB) {
+        return entA.localeCompare(entB);
+      }
+      return (b.inlinks_count || 0) - (a.inlinks_count || 0);
+    }
+
     let aVal: any = 0;
     let bVal: any = 0;
     if (sortField === "inlinks") {
@@ -225,10 +246,28 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
     );
   });
 
-  const totalCannibalizationPages = Math.max(1, Math.ceil(filteredCannibalizations.length / cannibalizationPageSize));
+  const sortedCannibalizations = [...filteredCannibalizations].sort((a, b) => {
+    let aVal: any = 0;
+    let bVal: any = 0;
+    if (cannibalizationSortField === "urls") {
+      aVal = (a.competingPages || []).length;
+      bVal = (b.competingPages || []).length;
+    } else if (cannibalizationSortField === "topic") {
+      aVal = a.entityName.toLowerCase();
+      bVal = b.entityName.toLowerCase();
+    } else if (cannibalizationSortField === "inlinks") {
+      aVal = a.competingPages?.[0]?.inlinks_count || 0;
+      bVal = b.competingPages?.[0]?.inlinks_count || 0;
+    }
+    if (aVal < bVal) return cannibalizationSortOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return cannibalizationSortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalCannibalizationPages = Math.max(1, Math.ceil(sortedCannibalizations.length / cannibalizationPageSize));
   const cbStartIndex = (cannibalizationPage - 1) * cannibalizationPageSize;
-  const cbEndIndex = Math.min(cbStartIndex + cannibalizationPageSize, filteredCannibalizations.length);
-  const paginatedCannibalizations = filteredCannibalizations.slice(cbStartIndex, cbEndIndex);
+  const cbEndIndex = Math.min(cbStartIndex + cannibalizationPageSize, sortedCannibalizations.length);
+  const paginatedCannibalizations = sortedCannibalizations.slice(cbStartIndex, cbEndIndex);
 
   // --- FILTRADO Y PAGINACIÓN DE ENTIDADES ---
   const rawEntities: any[] = data?.entities || [];
@@ -487,7 +526,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
             {metrics.cannibalizationCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>}
           </div>
           <div className="text-xl sm:text-2xl font-bold text-rose-900">{metrics.cannibalizationCount}</div>
-          <div className="text-[11px] text-rose-700/80">Ver matriz comparativa →</div>
+          <div className="text-[11px] text-rose-700/80">Ver tabla organizada →</div>
         </div>
 
         <div
@@ -531,7 +570,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-            <span>Matriz de Canibalizaciones ({data?.cannibalizations?.length || 0})</span>
+            <span>Tabla de Canibalizaciones ({data?.cannibalizations?.length || 0})</span>
           </button>
 
           <button
@@ -579,7 +618,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
                     onClick={() => setActiveView("cannibalization")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-semibold border border-rose-200 transition-colors cursor-pointer"
                   >
-                    <span>Ver matriz comparativa</span>
+                    <span>Ver tabla completa</span>
                   </button>
                   <button
                     onClick={() => setIsCannibalizationExpanded(!isCannibalizationExpanded)}
@@ -922,6 +961,17 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
                               <span className="truncate">{page.url}</span>
                               <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
                             </a>
+                            {page.is_cannibalized && page.cannibalized_with && page.cannibalized_with.length > 0 && (
+                              <div className="text-[10px] text-rose-700 flex items-center gap-1 mt-0.5 font-medium truncate">
+                                <span className="shrink-0 font-semibold">⚔️ Compite con:</span>
+                                <span className="truncate font-mono text-[10px] text-rose-900 bg-rose-50 px-1 rounded border border-rose-100">
+                                  {page.cannibalized_with[0]?.slug || page.cannibalized_with[0]?.url}
+                                </span>
+                                {page.cannibalized_with.length > 1 && (
+                                  <span className="text-[10px] text-rose-500 shrink-0">+{page.cannibalized_with.length - 1} más</span>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           {/* Title & H1 */}
@@ -1070,17 +1120,17 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
         </div>
       )}
 
-      {/* VISTA 2: MATRIZ DE CANIBALIZACIONES COMPARATIVA */}
+      {/* VISTA 2: TABLA MAESTRA DE CANIBALIZACIONES */}
       {activeView === "cannibalization" && (
         <div className="space-y-4">
           <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-rose-950 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-rose-600" />
-                <span>Matriz de Canibalizaciones Semánticas</span>
+                <span>Tabla Maestra de Canibalizaciones Semánticas</span>
               </h3>
               <p className="text-xs text-slate-600 mt-1">
-                Visualiza qué URLs compiten entre sí por cada tema en <strong className="text-slate-800">{namespace}</strong>, cuál es la URL líder por enlaces internos y cómo resolver el conflicto.
+                Inventario unificado de conflictos temáticos en <strong className="text-slate-800">{namespace}</strong>. Haz clic en cualquier fila o en <strong>&ldquo;Comparar&rdquo;</strong> para desplegar la comparativa cara a cara de URLs.
               </p>
             </div>
             <div className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-rose-200 text-rose-900 shrink-0">
@@ -1142,131 +1192,329 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
               No se encontraron canibalizaciones con los filtros actuales.
             </div>
           ) : (
-            <div className="space-y-4">
-              {paginatedCannibalizations.map((c: any) => {
-                const pagesInConflict = c.competingPages || [];
-                return (
-                  <div key={c.entityName} className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
-                        <h4 className="text-sm font-bold text-slate-900">
-                          Entidad: <span className="text-rose-700">{c.entityName}</span>
-                        </h4>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
-                          {pagesInConflict.length} URLs compitiendo
-                        </span>
-                      </div>
-                      <button
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider select-none">
+                      <th
                         onClick={() => {
-                          setSelectedCannibalizationEntity(c.entityName);
-                          setActiveFilter("all");
-                          setActiveView("pages");
+                          if (cannibalizationSortField === "topic") {
+                            setCannibalizationSortOrder(cannibalizationSortOrder === "asc" ? "desc" : "asc");
+                          } else {
+                            setCannibalizationSortField("topic");
+                            setCannibalizationSortOrder("asc");
+                          }
                         }}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors"
                       >
-                        <span>Filtrar en tabla de páginas →</span>
-                      </button>
-                    </div>
+                        <div className="flex items-center gap-1">
+                          <span>Tópico / Entidad</span>
+                          {cannibalizationSortField === "topic" ? (
+                            cannibalizationSortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-rose-600" /> : <ChevronDown className="w-3 h-3 text-rose-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                          )}
+                        </div>
+                      </th>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-100 text-slate-500 font-semibold text-[10px] uppercase tracking-wider bg-slate-50/50">
-                            <th className="py-2.5 px-4">Jerarquía / Rol</th>
-                            <th className="py-2.5 px-4">URL &amp; Slug</th>
-                            <th className="py-2.5 px-4">Título SEO &amp; H1</th>
-                            <th className="py-2.5 px-3 text-center">Inlinks</th>
-                            <th className="py-2.5 px-3 text-center">Palabras</th>
-                            <th className="py-2.5 px-4">Acción SEO Sugerida</th>
+                      <th
+                        onClick={() => {
+                          if (cannibalizationSortField === "urls") {
+                            setCannibalizationSortOrder(cannibalizationSortOrder === "asc" ? "desc" : "asc");
+                          } else {
+                            setCannibalizationSortField("urls");
+                            setCannibalizationSortOrder("desc");
+                          }
+                        }}
+                        className="py-3 px-3 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span>URLs</span>
+                          {cannibalizationSortField === "urls" ? (
+                            cannibalizationSortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-rose-600" /> : <ChevronDown className="w-3 h-3 text-rose-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th
+                        onClick={() => {
+                          if (cannibalizationSortField === "inlinks") {
+                            setCannibalizationSortOrder(cannibalizationSortOrder === "asc" ? "desc" : "asc");
+                          } else {
+                            setCannibalizationSortField("inlinks");
+                            setCannibalizationSortOrder("desc");
+                          }
+                        }}
+                        className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>URL Líder (Preferente)</span>
+                          {cannibalizationSortField === "inlinks" ? (
+                            cannibalizationSortOrder === "asc" ? <ChevronUp className="w-3 h-3 text-rose-600" /> : <ChevronDown className="w-3 h-3 text-rose-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />
+                          )}
+                        </div>
+                      </th>
+
+                      <th className="py-3 px-4">URLs Competidoras (Secundarias)</th>
+                      <th className="py-3 px-4">Diagnóstico SEO</th>
+                      <th className="py-3 px-4 text-right">Comparar / Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedCannibalizations.map((c: any) => {
+                      const pagesInConflict = c.competingPages || [];
+                      const leader = pagesInConflict[0];
+                      const competitors = pagesInConflict.slice(1);
+                      const isExpanded = Boolean(expandedCannibalizationTopics[c.entityName]);
+                      const isNearDuplicate = pagesInConflict.some((p: any) =>
+                        pagesInConflict.some(
+                          (other: any) =>
+                            other.url !== p.url &&
+                            (other.title?.toLowerCase() === p.title?.toLowerCase() ||
+                              other.slug?.replace(/-\d+$/, "") === p.slug?.replace(/-\d+$/, ""))
+                        )
+                      );
+
+                      return (
+                        <React.Fragment key={c.entityName}>
+                          {/* Fila Maestra del Conflicto */}
+                          <tr
+                            onClick={() => toggleCannibalizationTopic(c.entityName)}
+                            className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                              isExpanded ? "bg-rose-50/30" : ""
+                            }`}
+                          >
+                            {/* Tópico */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${isNearDuplicate ? "bg-rose-500" : "bg-amber-500"} shrink-0`}></span>
+                                <span className="font-bold text-slate-900 text-xs">{c.entityName}</span>
+                              </div>
+                            </td>
+
+                            {/* Conteo de URLs */}
+                            <td className="py-3 px-3 text-center">
+                              <span className="font-mono font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs">
+                                {pagesInConflict.length}
+                              </span>
+                            </td>
+
+                            {/* URL Líder */}
+                            <td className="py-3 px-4 max-w-xs">
+                              {leader ? (
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200/60">
+                                      {leader.slug || "inicio"}
+                                    </span>
+                                    <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/60 px-1.5 py-0.2 rounded" title="Enlaces internos entrantes">
+                                      {leader.inlinks_count} inlinks
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600 truncate" title={leader.title}>
+                                    {leader.title || leader.url}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">Sin datos</span>
+                              )}
+                            </td>
+
+                            {/* URLs Competidoras */}
+                            <td className="py-3 px-4 max-w-sm">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {competitors.slice(0, 2).map((comp: any) => (
+                                    <span
+                                      key={comp.url}
+                                      className="font-mono text-[10px] text-rose-800 bg-rose-50 px-1.5 py-0.2 rounded font-medium border border-rose-200/50"
+                                      title={comp.url}
+                                    >
+                                      {comp.slug} ({comp.inlinks_count} inlinks)
+                                    </span>
+                                  ))}
+                                  {competitors.length > 2 && (
+                                    <span className="text-[10px] font-semibold text-rose-600 bg-rose-100/60 px-1.5 py-0.2 rounded">
+                                      +{competitors.length - 2} más...
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Diagnóstico SEO */}
+                            <td className="py-3 px-4 whitespace-nowrap">
+                              {isNearDuplicate ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
+                                  ⚠️ Duplicado severo (301)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                  Diferenciar Search Intent
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Acciones */}
+                            <td className="py-3 px-4 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => toggleCannibalizationTopic(c.entityName)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                                    isExpanded
+                                      ? "bg-rose-600 text-white"
+                                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                  title="Desplegar comparativa detallada cara a cara"
+                                >
+                                  <span>{isExpanded ? "Cerrar" : "Comparar"}</span>
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedCannibalizationEntity(c.entityName);
+                                    setActiveFilter("all");
+                                    setActiveView("pages");
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition-colors cursor-pointer"
+                                  title="Filtrar estas URLs en la tabla principal de auditoría"
+                                >
+                                  <span>Filtrar</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {pagesInConflict.map((p: any, idx: number) => {
-                            const isLeader = idx === 0;
-                            const isNearDuplicate = pagesInConflict.some(
-                              (other: any) =>
-                                other.url !== p.url &&
-                                (other.title?.toLowerCase() === p.title?.toLowerCase() ||
-                                  other.slug?.replace(/-\d+$/, "") === p.slug?.replace(/-\d+$/, ""))
-                            );
-                            return (
-                              <tr key={p.url} className={isLeader ? "bg-emerald-50/20" : "hover:bg-slate-50/60"}>
-                                <td className="py-3 px-4 whitespace-nowrap">
-                                  {isLeader ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                                      🏆 URL Líder (Mayor Autoridad)
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-medium text-[10px] border border-rose-200/50">
-                                      ⚠️ Competidora #{idx + 1}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 max-w-xs">
-                                  <span className="font-mono text-[11px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/40">
-                                    {p.slug || "inicio"}
-                                  </span>
-                                  <a
-                                    href={p.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-slate-500 hover:text-blue-600 flex items-center gap-1 text-[11px] mt-0.5 truncate"
-                                  >
-                                    <span className="truncate">{p.url}</span>
-                                    <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
-                                  </a>
-                                </td>
-                                <td className="py-3 px-4 max-w-sm">
-                                  <span className="font-semibold text-slate-800 line-clamp-1" title={p.title}>
-                                    {p.title || <span className="italic text-slate-400">Sin título</span>}
-                                  </span>
-                                  {p.h1 && <p className="text-[10px] text-slate-400 truncate">H1: {p.h1}</p>}
-                                </td>
-                                <td className="py-3 px-3 text-center">
-                                  <span
-                                    className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${
-                                      isLeader ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-700"
-                                    }`}
-                                  >
-                                    {p.inlinks_count}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-center font-mono text-slate-600 text-xs">
-                                  {p.word_count || 0}
-                                </td>
-                                <td className="py-3 px-4">
-                                  {isLeader ? (
-                                    <span className="text-[11px] font-semibold text-emerald-700">
-                                      Mantener como canónica preferente
-                                    </span>
-                                  ) : isNearDuplicate ? (
-                                    <span className="inline-block text-[11px] text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-medium">
-                                      ⚠️ Duplicado severo: Redirigir con 301 a la URL líder
-                                    </span>
-                                  ) : (
-                                    <span className="inline-block text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
-                                      Diferenciar intención de búsqueda (Search Intent)
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
 
-              {/* Barra de Paginación de Canibalizaciones (Iniciando desde 5 resultados) */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-2xs">
+                          {/* Fila Expandida de Comparativa Detallada Cara a Cara */}
+                          {isExpanded && (
+                            <tr className="bg-slate-50/60 border-b border-rose-100">
+                              <td colSpan={6} className="p-4">
+                                <div className="bg-white border border-rose-200/80 rounded-xl p-3 shadow-xs space-y-3 animate-fadeIn">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-xs text-slate-900">
+                                        Comparativa Cara a Cara de URLs en: <strong className="text-rose-700">{c.entityName}</strong>
+                                      </span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">
+                                        {pagesInConflict.length} URLs involucradas
+                                      </span>
+                                    </div>
+                                    <span className="text-[11px] text-slate-500">
+                                      Ordenadas por autoridad interna (Inlinks)
+                                    </span>
+                                  </div>
+
+                                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                                    <table className="w-full text-left border-collapse text-xs">
+                                      <thead>
+                                        <tr className="border-b border-slate-200 text-slate-600 font-semibold text-[10px] uppercase tracking-wider bg-slate-50">
+                                          <th className="py-2 px-3">Jerarquía</th>
+                                          <th className="py-2 px-3">Página &amp; Slug</th>
+                                          <th className="py-2 px-3">Título SEO &amp; H1</th>
+                                          <th className="py-2 px-3 text-center">Inlinks</th>
+                                          <th className="py-2 px-3 text-center">Palabras</th>
+                                          <th className="py-2 px-3">Recomendación SEO</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {pagesInConflict.map((p: any, idx: number) => {
+                                          const isLeader = idx === 0;
+                                          const isDuplicate = pagesInConflict.some(
+                                            (other: any) =>
+                                              other.url !== p.url &&
+                                              (other.title?.toLowerCase() === p.title?.toLowerCase() ||
+                                                other.slug?.replace(/-\d+$/, "") === p.slug?.replace(/-\d+$/, ""))
+                                          );
+                                          return (
+                                            <tr key={p.url} className={isLeader ? "bg-emerald-50/20" : "hover:bg-slate-50/60"}>
+                                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                                {isLeader ? (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                                    🏆 URL Líder
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-medium text-[10px] border border-rose-200/50">
+                                                    ⚠️ Competidora #{idx + 1}
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="py-2.5 px-3 max-w-xs">
+                                                <span className="font-mono text-[10px] text-indigo-700 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/40">
+                                                  {p.slug || "inicio"}
+                                                </span>
+                                                <a
+                                                  href={p.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-slate-500 hover:text-blue-600 flex items-center gap-1 text-[11px] mt-0.5 truncate"
+                                                >
+                                                  <span className="truncate">{p.url}</span>
+                                                  <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-50" />
+                                                </a>
+                                              </td>
+                                              <td className="py-2.5 px-3 max-w-sm">
+                                                <span className="font-semibold text-slate-800 line-clamp-1" title={p.title}>
+                                                  {p.title || <span className="italic text-slate-400">Sin título</span>}
+                                                </span>
+                                                {p.h1 && <p className="text-[10px] text-slate-400 truncate">H1: {p.h1}</p>}
+                                              </td>
+                                              <td className="py-2.5 px-3 text-center">
+                                                <span
+                                                  className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                                                    isLeader ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-700"
+                                                  }`}
+                                                >
+                                                  {p.inlinks_count}
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-3 text-center font-mono text-slate-600 text-xs">
+                                                {p.word_count || 0}
+                                              </td>
+                                              <td className="py-2.5 px-3">
+                                                {isLeader ? (
+                                                  <span className="text-[11px] font-semibold text-emerald-700">
+                                                    Mantener como canónica preferente
+                                                  </span>
+                                                ) : isDuplicate ? (
+                                                  <span className="inline-block text-[10px] text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-medium">
+                                                    ⚠️ Duplicado: Redirigir con 301 a la URL líder
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-block text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
+                                                    Diferenciar Search Intent / Cambiar enfoque
+                                                  </span>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Barra de Paginación Organizada (Iniciando desde 5 resultados) */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-50/80 border-t border-slate-200 text-xs text-slate-600">
                 <div className="flex items-center gap-4">
                   <span>
-                    Mostrando <strong className="text-slate-900">{filteredCannibalizations.length === 0 ? 0 : cbStartIndex + 1}</strong> a{" "}
+                    Mostrando <strong className="text-slate-900">{sortedCannibalizations.length === 0 ? 0 : cbStartIndex + 1}</strong> a{" "}
                     <strong className="text-slate-900">{cbEndIndex}</strong> de{" "}
-                    <strong className="text-slate-900">{filteredCannibalizations.length}</strong> temas en conflicto
+                    <strong className="text-slate-900">{sortedCannibalizations.length}</strong> temas en conflicto
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 font-medium">Por página:</span>
