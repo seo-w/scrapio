@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "ingest": "tsx scripts/ingest.ts",
-    "mcp": "tsx scripts/mcp-server.ts"
+    "ingest": "node ./node_modules/tsx/dist/cli.mjs scripts/ingest.ts",
+    "mcp": "node ./node_modules/tsx/dist/cli.mjs scripts/mcp-server.ts",
+    "export-md": "node ./node_modules/tsx/dist/cli.mjs scripts/export-markdown.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.7",
@@ -16,8 +17,10 @@
     "@langchain/textsplitters": "^0.1.0",
     "@pinecone-database/pinecone": "^4.1.0",
     "@supabase/supabase-js": "^2.118.0",
+    "@types/jszip": "^3.4.0",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.7",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.475.0",
     "next": "^15.5.28",
     "openai": "^4.85.4",

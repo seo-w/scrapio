@@ -80,6 +80,7 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   const [copiedSchema, setCopiedSchema] = useState(false);
   const [isSyncingPinecone, setIsSyncingPinecone] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   const handleSyncFromPinecone = async () => {
     if (!namespace) return;
@@ -344,6 +345,60 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
     URL.revokeObjectURL(url);
   };
 
+  const downloadAllMarkdownZip = async () => {
+    if (!pages || pages.length === 0) return;
+    setIsZipping(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const usedFilenames = new Set<string>();
+
+      for (const page of pages) {
+        const rawContent = page.markdown_content || "";
+        let baseName = page.slug
+          ? page.slug.toLowerCase().replace(/[^a-z0-9\-_.]/g, "-")
+          : "";
+
+        if (!baseName || baseName === "index" || baseName === "inicio") {
+          try {
+            const parsed = new URL(page.url);
+            const pathPart = parsed.pathname.replace(/^\/|\/$/g, "").replace(/\//g, "-");
+            baseName = pathPart || parsed.hostname;
+          } catch {
+            baseName = page.title || "pagina";
+          }
+        }
+        baseName = baseName.replace(/[^a-z0-9\-_.]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        if (!baseName) baseName = `page-${page.id || Math.random().toString(36).substring(7)}`;
+
+        let fileName = `${baseName}.md`;
+        let counter = 2;
+        while (usedFilenames.has(fileName.toLowerCase())) {
+          fileName = `${baseName}-${counter}.md`;
+          counter++;
+        }
+        usedFilenames.add(fileName.toLowerCase());
+
+        zip.file(fileName, rawContent);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `markdowns-${namespace || "export"}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error al generar archivo ZIP:", err);
+      alert("Hubo un error al generar el archivo ZIP.");
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
   const exportCsv = () => {
     if (!pages || pages.length === 0) return;
     const headers = [
@@ -428,6 +483,15 @@ export default function SeoAuditDashboard({ namespace, onBackToChat }: SeoAuditD
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
             <span>Actualizar</span>
+          </button>
+          <button
+            onClick={downloadAllMarkdownZip}
+            disabled={pages.length === 0 || isZipping}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Descargar todos los archivos Markdown en un .ZIP comprimido"
+          >
+            <Download className={`w-3.5 h-3.5 ${isZipping ? "animate-bounce" : ""}`} />
+            <span>{isZipping ? "Empaquetando ZIP..." : "Descargar Todos (.ZIP)"}</span>
           </button>
           <button
             onClick={exportCsv}

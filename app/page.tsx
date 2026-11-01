@@ -1369,6 +1369,15 @@ export default function Home() {
                   >
                     <span>{activeWorkspaceView === "seo_audit" ? "💬 Volver al Chat" : "🕸️ Auditoría SEO"}</span>
                   </button>
+                  <span className="text-slate-400 hidden sm:inline">·</span>
+                  <a
+                    href={`/api/namespaces/export-zip?namespace=${encodeURIComponent(namespace)}`}
+                    download
+                    className="text-xs sm:text-base font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all shadow-2xs"
+                    title="Descargar todos los archivos Markdown de este namespace en un archivo comprimido .ZIP"
+                  >
+                    <span>📦 Descargar .MD (ZIP)</span>
+                  </a>
                 </>
               ) : (
                 <>
@@ -2930,12 +2939,23 @@ print(res.json()["answer"])`}</pre>
                     </span>
                   )}
 
-                  <button
-                    onClick={() => setIsUrlsAuditModalOpen(false)}
-                    className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
-                  >
-                    Cerrar
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/api/namespaces/export-zip?namespace=${encodeURIComponent(urlsAuditData.namespace)}`}
+                      download
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-base px-4 py-2.5 rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
+                      title="Descargar todos los archivos Markdown de este namespace en formato .ZIP"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Descargar .MD (ZIP)</span>
+                    </a>
+                    <button
+                      onClick={() => setIsUrlsAuditModalOpen(false)}
+                      className="bg-slate-900 text-white text-base font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
