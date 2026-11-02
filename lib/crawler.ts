@@ -229,9 +229,26 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
     useSitemap = true,
   } = options;
 
-  const normalizedStart = normalizeUrl(startUrl, startUrl);
+  let normalizedStart = normalizeUrl(startUrl, startUrl);
   if (!normalizedStart) {
     throw new Error(`URL de inicio no válida: ${startUrl}`);
+  }
+
+  // Resolver redirecciones iniciales si el dominio cambia (ej: kalley.com -> kalley.com.co)
+  try {
+    const headRes = await fetch(toScraperUrl(normalizedStart), {
+      headers: getHeaders(),
+      redirect: "follow",
+    });
+    if (headRes.ok && headRes.url) {
+      const finalUrl = normalizeUrl(headRes.url, headRes.url);
+      if (finalUrl && finalUrl !== normalizedStart) {
+        console.log(`🔀 Redirección detectada en URL de inicio: ${normalizedStart} ➔ ${finalUrl}`);
+        normalizedStart = finalUrl;
+      }
+    }
+  } catch {
+    // Si falla la verificación previa, se mantiene normalizedStart
   }
 
   const visitedUrls = new Set<string>();

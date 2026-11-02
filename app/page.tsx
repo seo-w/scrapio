@@ -82,6 +82,7 @@ const inferUrlFromNamespace = (nsName: string) => {
   const clean = nsName.toLowerCase().replace(/^cliente-/, "").replace(/^pb_/, "");
   if (!clean) return "";
   if (clean.includes("avafin")) return "https://www.avafin.mx";
+  if (clean.includes("kalley")) return "https://www.kalley.com.co";
   if (clean.includes("personalbliss")) return "https://personalbliss.org";
   return `https://www.${clean.replace(/_/g, "-")}.com`;
 };
