@@ -15,6 +15,10 @@ on:
         description: 'Límite máximo de páginas a rastrear'
         required: false
         default: '20'
+      max_depth:
+        description: 'Profundidad máxima de rastreo de enlaces (clicks desde la home)'
+        required: false
+        default: '6'
       ai_provider:
         description: 'Proveedor de IA (gemini u openai)'
         required: false
@@ -46,4 +50,4 @@ jobs:
           SCRAPIO_API_URL: ${{ secrets.SCRAPIO_API_URL || 'https://scrapio-one.vercel.app' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }} --provider "${{ github.event.inputs.ai_provider }}"
+        run: npx tsx scripts/ingest.ts --url "${{ github.event.inputs.target_url }}" --namespace "${{ github.event.inputs.client_namespace }}" --maxPages ${{ github.event.inputs.max_pages }} --maxDepth ${{ github.event.inputs.max_depth || '6' }} --provider "${{ github.event.inputs.ai_provider }}"

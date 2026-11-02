@@ -30,12 +30,14 @@ async function main() {
   let targetUrl = process.env.TARGET_URL || "https://avafin.mx";
   let namespace = process.env.CLIENT_NAMESPACE || "cliente-avafin";
   let maxPages = 20;
+  let maxDepth = 6;
   let provider = process.env.AI_PROVIDER || "gemini";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--url" && args[i + 1]) targetUrl = args[i + 1];
     if (args[i] === "--namespace" && args[i + 1]) namespace = args[i + 1];
     if (args[i] === "--maxPages" && args[i + 1]) maxPages = parseInt(args[i + 1], 10);
+    if ((args[i] === "--maxDepth" || args[i] === "--depth") && args[i + 1]) maxDepth = parseInt(args[i + 1], 10);
     if (args[i] === "--provider" && args[i + 1]) provider = args[i + 1];
   }
 
@@ -44,6 +46,7 @@ async function main() {
   console.log(`URL Base: ${targetUrl}`);
   console.log(`Namespace: ${namespace}`);
   console.log(`Máximo de Páginas: ${maxPages}`);
+  console.log(`Profundidad Máxima: ${maxDepth}`);
   console.log(`Proveedor IA: ${provider.toUpperCase()}`);
   console.log("==========================================");
 
@@ -70,7 +73,7 @@ async function main() {
   const chunks = await crawlDomain({
     startUrl: targetUrl,
     maxPages,
-    maxDepth: 3,
+    maxDepth,
     chunkSize: 1000,
     chunkOverlap: 150,
     namespace,

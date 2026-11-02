@@ -800,6 +800,7 @@ export default function Home() {
           targetUrl: scanUrl.trim(),
           clientNamespace: scanNamespace.trim(),
           maxPages: parseInt(scanMaxPages, 10) || 100,
+          maxDepth: 6,
           aiProvider: selectedEngine,
         }),
       });

@@ -5,7 +5,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { targetUrl, clientNamespace, maxPages = 50, aiProvider } = body;
+    const { targetUrl, clientNamespace, maxPages = 50, maxDepth = 6, aiProvider } = body;
 
     if (!targetUrl || typeof targetUrl !== "string") {
       return NextResponse.json(
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
           target_url: targetUrl,
           client_namespace: clientNamespace,
           max_pages: String(maxPages),
+          max_depth: String(maxDepth || 6),
           ai_provider: aiProvider || "gemini",
         },
       }),

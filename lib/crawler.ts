@@ -223,7 +223,7 @@ export async function crawlDomain(options: CrawlOptions): Promise<PageChunk[]> {
   const {
     startUrl,
     maxPages = 50,
-    maxDepth = 3,
+    maxDepth = 6,
     chunkSize = 1000,
     chunkOverlap = 150,
     useSitemap = true,
