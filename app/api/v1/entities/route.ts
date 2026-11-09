@@ -4,6 +4,10 @@ import { queryPinecone, resolvePineconeNamespace } from "@/lib/pinecone";
 import { getScrapioUserOrApiKey, isNamespaceAllowed } from "@/lib/auth";
 import { getEntityGraphByNamespace, summarizeGraph } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const maxDuration = 60;
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",

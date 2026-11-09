@@ -4,6 +4,9 @@ import { queryPinecone } from "@/lib/pinecone";
 import { getScrapioUser, isNamespaceAllowed } from "@/lib/auth";
 import { rerankHybridChunks } from "@/lib/hybrid";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getScrapioUser();

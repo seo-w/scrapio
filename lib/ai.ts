@@ -49,11 +49,14 @@ export async function generateEmbedding(
     try {
       if (!openAiKey) return null;
       const openai = getOpenAIClient(openAiKey);
-      const res = await openai.embeddings.create({
-        model: "text-embedding-3-small",
-        input: text,
-        dimensions: 768,
-      });
+      const res = await openai.embeddings.create(
+        {
+          model: "text-embedding-3-small",
+          input: text,
+          dimensions: 768,
+        },
+        { timeout: 8000 }
+      );
       return res.data[0].embedding;
     } catch (err: any) {
       console.warn("⚠️ Error en OpenAI embedding:", err.message);
@@ -69,7 +72,7 @@ export async function generateEmbedding(
 
   // Proveedor por defecto: Google Gemini
   const genAI = getGenAIClient(geminiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" });
+  const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { timeout: 7000 });
 
   let geminiError: any = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -209,14 +212,17 @@ ${formattedContext}`;
     try {
       if (!openAiKey) return null;
       const openai = getOpenAIClient(openAiKey);
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: query },
-        ],
-      });
+      const completion = await openai.chat.completions.create(
+        {
+          model: "gpt-4o-mini",
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: query },
+          ],
+        },
+        { timeout: 10000 }
+      );
       return {
         text: completion.choices[0]?.message?.content || "Sin respuesta.",
         sources,
@@ -233,11 +239,17 @@ ${formattedContext}`;
     console.warn("⚠️ OpenAI no disponible o agotó cuota. Intentando fallback con Google Gemini...");
   }
 
-  // Proveedor por defecto: Gemini (con lista ordenada de modelos de alta disponibilidad)
+  // Proveedor por defecto: Gemini (con lista ordenada de modelos rápidos y de alta disponibilidad)
   const genAI = getGenAIClient(geminiKey);
-  const preferredModel = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
   const candidateModels = Array.from(
-    new Set([preferredModel, "gemini-flash-latest", "gemini-3.5-flash", "gemini-2.5-flash-lite"])
+    new Set([
+      preferredModel,
+      "gemini-flash-lite-latest",
+      "gemini-2.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-flash-latest",
+    ])
   );
 
   let lastError: any = null;
@@ -245,12 +257,15 @@ ${formattedContext}`;
 
   for (const modelName of candidateModels) {
     try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        generationConfig: {
-          temperature: 0.2,
+      const model = genAI.getGenerativeModel(
+        {
+          model: modelName,
+          generationConfig: {
+            temperature: 0.2,
+          },
         },
-      });
+        { timeout: 7000 }
+      );
 
       const result = await model.generateContent(fullPrompt);
       return {
