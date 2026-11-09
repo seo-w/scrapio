@@ -293,9 +293,17 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const userFallbackOpenAiKey = (
+          args.openaiApiKey ||
+          args.openaiKey ||
+          req.headers.get("x-openai-key") ||
+          authUser.customOpenAiKey ||
+          ""
+        ).trim() || undefined;
+
         const [resolvedNs, queryVector] = await Promise.all([
           resolvePineconeNamespace(rawNamespace),
-          generateEmbedding(query, undefined, 3, undefined, authUser.customOpenAiKey),
+          generateEmbedding(query, undefined, 3, undefined, userFallbackOpenAiKey),
         ]);
         const matches = await queryPinecone(resolvedNs, queryVector, topK);
 
@@ -323,7 +331,7 @@ export async function POST(req: NextRequest) {
           text: match.metadata.text_chunk,
         }));
 
-        const { text, sources } = await generateRAGResponse(query, contextChunks, undefined, undefined, authUser.customOpenAiKey);
+        const { text, sources } = await generateRAGResponse(query, contextChunks, undefined, undefined, userFallbackOpenAiKey);
 
         let fullText = text;
         if (sources && sources.length > 0) {
@@ -428,6 +436,14 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const userFallbackOpenAiKey = (
+          args.openaiApiKey ||
+          args.openaiKey ||
+          req.headers.get("x-openai-key") ||
+          authUser.customOpenAiKey ||
+          ""
+        ).trim() || undefined;
+
         const [resolvedNs, queryVector] = await Promise.all([
           resolvePineconeNamespace(rawNamespace),
           generateEmbedding(
@@ -435,7 +451,7 @@ export async function POST(req: NextRequest) {
             undefined,
             3,
             undefined,
-            authUser.customOpenAiKey
+            userFallbackOpenAiKey
           ),
         ]);
         const matches = await queryPinecone(resolvedNs, queryVector, 12);
@@ -466,7 +482,7 @@ export async function POST(req: NextRequest) {
 4. LUGARES Y COBERTURA
 5. TABLA RESUMEN CON SCHEMA.ORG (Organization, Product, Service, LocalBusiness, etc.)`;
 
-        const { text, sources } = await generateRAGResponse(prompt, contextChunks, undefined, undefined, authUser.customOpenAiKey);
+        const { text, sources } = await generateRAGResponse(prompt, contextChunks, undefined, undefined, userFallbackOpenAiKey);
         let fullText = text;
         if (sources && sources.length > 0) {
           fullText += "\n\n### Fuentes analizadas:\n" + sources.map((s, idx) => `${idx + 1}. [${s}](${s})`).join("\n");

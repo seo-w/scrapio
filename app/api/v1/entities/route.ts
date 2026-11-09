@@ -62,7 +62,14 @@ async function handleEntities(req: NextRequest, isPost: boolean) {
       );
     }
 
-    const userFallbackOpenAiKey = authUser.customOpenAiKey;
+    const userFallbackOpenAiKey = (
+      body.openaiApiKey ||
+      body.openaiKey ||
+      searchParams.get("openaiKey") ||
+      req.headers.get("x-openai-key") ||
+      authUser.customOpenAiKey ||
+      ""
+    ).trim() || undefined;
 
     // 1. Resolver namespace y generar vector embedding en paralelo
     const [namespace, queryVector] = await Promise.all([

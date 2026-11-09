@@ -96,8 +96,8 @@ export async function generateEmbedding(
         err.message?.includes("billing") ||
         err.message?.includes("Billing");
 
-      if (attempt === retries || isQuotaOrBillingError) {
-        break; // Romper el bucle para intentar fallback con OpenAI
+      if (attempt === retries || isQuotaOrBillingError || openAiKey) {
+        break; // Romper el bucle para intentar fallback inmediato con OpenAI
       }
 
       const backoffMs = Math.pow(2, attempt) * 1500;
@@ -275,6 +275,23 @@ ${formattedContext}`;
     } catch (err: any) {
       lastError = err;
       console.warn(`⚠️ Modelo Gemini '${modelName}' no respondió (${err.status || err.message}). Intentando siguiente fallback...`);
+
+      // Si el error es de cuota agotada o facturación y el usuario tiene cuenta de OpenAI configurada:
+      // Saltar de inmediato a OpenAI para no hacer esperar al usuario por modelos que compartirán la misma cuota
+      const isQuotaOrBilling =
+        err.status === 429 ||
+        err.status === 402 ||
+        err.status === 403 ||
+        err.message?.includes("429") ||
+        err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("quota") ||
+        err.message?.includes("Quota");
+
+      if (isQuotaOrBilling && openAiKey) {
+        console.warn("⚠️ Gemini agotó cuota o tiene restricción de facturación. Saltando inmediatamente a OpenAI...");
+        break;
+      }
+
       // Si no es el último modelo de la lista, continúa con el siguiente modelo candidato
       if (modelName !== candidateModels[candidateModels.length - 1]) {
         continue;
